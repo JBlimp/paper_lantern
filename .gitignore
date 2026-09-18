@@ -1,0 +1,11 @@
+node_modules/
+dist/
+artifacts/
+*.zip
+!releases/paper-lantern-*.zip
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,31 @@
+{
+  "name": "paper-lantern",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build && node scripts/package.mjs",
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/bodyFilter.test.ts tests/references.test.ts",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/chrome": "^0.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "pdf-lib": "^1.17.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  },
+  "description": "Read English research PDFs alongside local Korean translations in Chrome.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JBlimp/paper_lantern.git"
+  }
+}
