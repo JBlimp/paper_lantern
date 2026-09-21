@@ -12,9 +12,15 @@ import { availability, createTranslator, errorMessage, type LocalTranslator } fr
 import { readPage } from './readPage';
 import { embedded, readTabPdf } from './pdfSource';
 import { removeLegacyCache } from './removeLegacyCache';
+import { CodexClient, type CodexModel } from './codex';
+import { CodexPanel } from './CodexPanel';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 function App() {
+  const [provider, setProvider] = useState('chrome'), providerRef = useRef('chrome');
+  const [chatOpen, setChatOpen] = useState(false), [connected, setConnected] = useState(false), [connecting, setConnecting] = useState(false);
+  const [models, setModels] = useState<CodexModel[]>([]), [model, setModel] = useState(''), modelRef = useRef('');
+  const codex = useRef(new CodexClient());
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null), [name, setName] = useState('');
   const [page, setPage] = useState(1);
   const [jump, setJump] = useState({ page: 1, serial: 0 });
@@ -46,7 +52,8 @@ function App() {
   useEffect(() => {
     availability().then(value => setAi(previous => previous === 'checking' ? value : previous)).catch(onError);
     removeLegacyCache(setNotice);
-    return () => { run.current++; abort.current?.abort(); translator.current?.destroy(); };
+    codex.current.onDisconnect = () => setConnected(false);
+    return () => { run.current++; abort.current?.abort(); translator.current?.destroy(); codex.current.disconnect(); };
   }, [onError]);
 
   useEffect(() => {
@@ -57,6 +64,10 @@ function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (connected && providerRef.current === 'codex' && documentRef.current) resume(mode, true);
+  }, [connected]);
+
   function stop() {
     run.current++; abort.current?.abort(); translator.current?.destroy(); translator.current = null;
     setBusy(false); setPreparing(false); setLoading(false); setAi('available');
@@ -65,7 +76,15 @@ function App() {
     setPreparing(true); setProgress(0);
     try {
       // Invoked immediately by file selection/drop or retry, before PDF I/O.
-      const session = await createTranslator(value => { if (run.current === ticket) setProgress(value); });
+      const session: LocalTranslator = providerRef.current === 'codex' ? (() => {
+        if (!connected) throw new Error('Codex 질문 패널에서 먼저 연결해 주세요.');
+        const selectedModel = modelRef.current;
+        return {
+          translate: async () => { throw new Error('Codex는 문맥 단위로 번역합니다.'); },
+          translateBatch: (targets, context, signal) => codex.current.request<Record<string, string>>('translate', { sentences: targets.map(s => ({ id: s.id, text: s.text })), context, model: selectedModel }, signal),
+          destroy() {},
+        };
+      })() : await createTranslator(value => { if (run.current === ticket) setProgress(value); });
       if (ticket !== run.current) { session.destroy(); return null; }
       translator.current = session; setAi('ready'); return session;
     } catch (e) {
@@ -86,6 +105,19 @@ function App() {
       const session = await ready;
       if (!session || ticket !== run.current) return;
       for (let number = 1; number <= document.numPages; number++) {
+        if (session.translateBatch) {
+          const all = pageSentences.current.get(number) ?? [];
+          const remaining = all.filter(s => !translated.current[s.id]);
+          while (remaining.length) {
+            const batch: Sentence[] = []; let size = 0;
+            while (remaining.length && batch.length < 16 && (!batch.length || size + remaining[0].text.length < 7000)) { const s = remaining.shift()!; batch.push(s); size += s.text.length; }
+            const result = await session.translateBatch(batch, all.map(s => s.text).join('\n').slice(0, 24000), controller.signal);
+            if (ticket !== run.current) return;
+            Object.assign(translated.current, result); setTranslations(previous => ({ ...previous, ...result }));
+          }
+          if (ticket !== run.current) return;
+          setCompletedPages(number); continue;
+        }
         for (const sentence of pageSentences.current.get(number) ?? []) {
           if (ticket !== run.current) return;
           if (translated.current[sentence.id]) continue;
@@ -133,6 +165,16 @@ function App() {
     const saved = pageSentences.current.get(next); setSentences(saved ?? []); setParsed(!!saved);
     document.querySelector('.translation-scroll')?.scrollTo({ top: 0 });
   }
+  async function connectCodex() {
+    setConnecting(true); setError(''); codex.current.disconnect();
+    try {
+      const result = await codex.current.connect();
+      if (!result.models.length) throw new Error('사용 가능한 Codex 모델이 없습니다.');
+      setModels(result.models); const selected = result.models.find(m => m.isDefault)?.id || result.models[0].id;
+      modelRef.current = selected; setModel(selected); setConnected(true);
+    } catch (e) { codex.current.disconnect(); onError(e); }
+    finally { setConnecting(false); }
+  }
   function navigate(next: number) { selectPage(next); setJump(previous => ({ page: next, serial: previous.serial + 1 })); }
   const done = sentences.filter(s => translations[s.id]).length;
   const status: Record<string, string> = { checking: '환경 확인 중', missing: '번역 API 없음', unavailable: '이 환경에서 사용 불가', downloadable: '최초 다운로드 필요', downloading: '모델 다운로드 필요', available: '모델 시작 가능', ready: '로컬 번역 준비됨' };
@@ -141,6 +183,12 @@ function App() {
       <div className="toolbar" role="toolbar" aria-label="논문 읽기 도구">
         {!embedded && <button onClick={() => fileInput.current?.click()} disabled={loading}>파일 선택 (독립 리더)</button>}
         <div className="filename" title={name}>{loading ? 'PDF 여는 중…' : name}</div>
+        <select aria-label="번역 엔진" value={provider} disabled={loading} onChange={e => {
+          const next = e.target.value; providerRef.current = next; setProvider(next);
+          if (next === 'codex' && !connected) { stop(); setChatOpen(true); translated.current = {}; setTranslations({}); setCompletedPages(0); }
+          else resume(mode, true);
+        }}><option value="chrome">Chrome 번역</option><option value="codex">Codex 번역</option></select>
+        <button onClick={() => setChatOpen(previous => !previous)} aria-pressed={chatOpen}>Codex 질문</button>
         {doc && <><div className="page-controls"><button aria-label="이전 페이지" disabled={page <= 1 || loading} onClick={() => navigate(page - 1)}>‹</button><span>{page} <em>/ {doc.numPages}</em></span><button aria-label="다음 페이지" disabled={page >= doc.numPages || loading} onClick={() => navigate(page + 1)}>›</button></div><select aria-label="읽기 순서" title="PDF 읽기 순서" value={mode} disabled={loading} onChange={e => { const next = e.target.value as typeof mode; setMode(next); resume(next, true); }}><option value="auto">자동</option><option value="single">1단</option><option value="double">2단</option></select></>}
         <span className="ai-status" role="status" title={status[ai]}>{preparing ? `모델 준비 중 · ${progress}%` : doc ? `${busy ? '전체 번역' : completedPages === doc.numPages ? '번역 완료' : '번역 대기'} · ${completedPages} / ${doc.numPages} 페이지` : ''}</span>
         {doc && (busy || preparing ? <button onClick={stop}>번역 중단</button> : completedPages < doc.numPages ? <button className="primary" onClick={() => resume()}>번역 이어서</button> : null)}
@@ -148,13 +196,13 @@ function App() {
       <input ref={fileInput} type="file" accept="application/pdf,.pdf" aria-label="PDF 파일 선택" className="file-input" onChange={e => { void open(e.target.files?.[0]); e.target.value = ''; }}/>
       {error && <div className="message error" role="alert">{error}<button onClick={() => setError('')} aria-label="오류 닫기">×</button></div>}
       {notice && <div className="message" role="status">{notice}<button onClick={() => setNotice('')} aria-label="알림 닫기">×</button></div>}
-      {!doc ? <section className="empty"><button onClick={() => embedded ? location.reload() : fileInput.current?.click()} disabled={loading}>{loading ? 'PDF를 여는 중입니다…' : embedded ? '원본 PDF 다시 읽기' : 'PDF 파일 선택 (독립 리더)'}</button><p>Gemini와 함께 읽으려면 Ctrl+O로 PDF를 Chrome 탭에 직접 여세요.</p><p>확장 설정에서 ‘파일 URL에 대한 액세스 허용’을 켜야 로컬 PDF에 적용됩니다.</p></section> : <section className="reader">
+      <div className="workspace"><div className="reading-area">{!doc ? <section className="empty"><button onClick={() => embedded ? location.reload() : fileInput.current?.click()} disabled={loading}>{loading ? 'PDF를 여는 중입니다…' : embedded ? '원본 PDF 다시 읽기' : 'PDF 파일 선택 (독립 리더)'}</button><p>Gemini와 함께 읽으려면 Ctrl+O로 PDF를 Chrome 탭에 직접 여세요.</p><p>확장 설정에서 ‘파일 URL에 대한 액세스 허용’을 켜야 로컬 PDF에 적용됩니다.</p></section> : <section className="reader">
         <SplitPane><section className="pane"><ContinuousPdf key={doc.fingerprints[0]} doc={doc} jump={jump} onPage={selectPage} mode={mode} active={active} onActive={onPdfActive} onReady={onReady} onError={onError}/></section>
         <section className="pane translation-pane"><TranslationView done={done} total={sentences.length} hydrating={!parsed}>
           {!sentences.length && <div className="text-empty">{parsed ? '번역할 본문이 없는 페이지입니다.' : '텍스트를 분석하고 있습니다.'}<br/><small>그림·표 등은 제외됩니다. 스캔 페이지의 OCR은 아직 지원하지 않습니다.</small></div>}
           {sentences.map((sentence, index) => <article key={sentence.id} data-sentence={sentence.id} tabIndex={0} className={`sentence ${active === sentence.id ? 'active' : ''} ${translations[sentence.id] ? 'translated' : ''}`} onMouseEnter={() => setActive(sentence.id)} onMouseLeave={() => setActive(null)} onFocus={() => setActive(sentence.id)} onBlur={() => setActive(null)}><span className="sentence-number">{String(index + 1).padStart(2, '0')}</span><div>{translations[sentence.id] ? <p lang="ko" title={sentence.text}>{translations[sentence.id]}</p> : <><p lang="en" className="source-preview">{sentence.text}</p></>}</div></article>)}
         </TranslationView></section></SplitPane>
-      </section>}
+      </section>}</div><div className="chat-container" hidden={!chatOpen}><CodexPanel doc={doc} page={page} client={codex.current} connected={connected} models={models} model={model} onModel={next => { modelRef.current = next; setModel(next); if (providerRef.current === 'codex') stop(); }} onConnect={() => void connectCodex()} connecting={connecting} onClose={() => setChatOpen(false)} navigate={navigate}/></div></div>
     </main>{drag && <div className="drop-overlay">PDF를 놓아 열기</div>}
   </div>;
 }

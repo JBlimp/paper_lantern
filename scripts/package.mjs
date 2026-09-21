@@ -8,4 +8,5 @@ for (const name of ['pdfjs-dist', 'react', 'react-dom', 'scheduler']) {
   await cp(`node_modules/${name}/LICENSE`, `dist/licenses/${name}.txt`);
 }
 await cp('README.md', 'dist/README.md');
+await cp('companion', 'dist/companion', { recursive: true });
 console.log('Extension ready: dist/');

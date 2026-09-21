@@ -1,0 +1,48 @@
+// Opt-in real Codex smoke test: synthetic public text only. Registers the local
+// dist extension with the companion; does not modify the user's Chrome profile.
+import { chromium, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { mkdir, writeFile } from 'node:fs/promises';
+if (!process.argv.includes('--real')) throw new Error('Pass --real to run inference using the signed-in Codex account.');
+await mkdir('artifacts', { recursive: true });
+const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica);
+pdf.addPage([612, 792]).drawText('Approximate nearest neighbor search uses a graph index.', { x: 48, y: 650, size: 12, font });
+await writeFile('artifacts/codex-sample.pdf', await pdf.save());
+const context = await chromium.launchPersistentContext('', { channel: 'chrome', headless: true, viewport: { width: 1600, height: 1000 }, ignoreDefaultArgs: ['--disable-extensions'], args: ['--enable-unsafe-extension-debugging'] });
+try {
+  const cdp = await context.browser().newBrowserCDPSession();
+  const { id } = await cdp.send('Extensions.loadUnpacked', { path: resolve('dist') });
+  execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve('companion/install.ps1'), '-ExtensionId', id], { windowsHide: true });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(`chrome-extension://${id}/index.html`);
+  await page.getByLabel('번역 엔진').selectOption('codex');
+  await page.getByRole('button', { name: 'Codex 연결', exact: true }).click();
+  await expect(page.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
+  await page.getByLabel('PDF 파일 선택').setInputFiles('artifacts/codex-sample.pdf');
+  await expect(page.locator('.ai-status')).toContainText('번역 완료', { timeout: 180000 });
+  const translated = await page.locator('.sentence.translated p').allTextContents();
+  expect(translated.join(' ')).toContain('graph index');
+  await page.getByLabel('논문 질문').fill('어떤 index를 사용하나요?');
+  await page.getByRole('button', { name: '질문', exact: true }).click();
+  await expect(page.locator('.chat-message.assistant')).toHaveCount(1, { timeout: 180000 });
+  await expect(page.locator('.chat-citations button')).toContainText('1쪽');
+  await page.locator('.chat-citations button').click();
+  await page.screenshot({ path: 'artifacts/codex-reader.png' });
+  await page.getByLabel('논문 질문').fill('간단하게 다시 설명해주세요.');
+  await page.getByRole('button', { name: '질문', exact: true }).click();
+  await page.getByRole('button', { name: '중단', exact: true }).click();
+  await expect(page.getByRole('button', { name: '질문', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(k => /codex|chat|translat/i.test(k)))).toEqual([]);
+  const pdfTab = await context.newPage();
+  await pdfTab.goto(pathToFileURL(resolve('artifacts/codex-sample.pdf')).href);
+  const reader = pdfTab.frameLocator('#paper-lantern-reader');
+  await reader.getByRole('button', { name: 'Codex 질문', exact: true }).click();
+  await reader.getByRole('button', { name: 'Codex 연결', exact: true }).click();
+  await expect(reader.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
+  console.log('PASS: real native messaging, ChatGPT login, model catalog, Codex translation, Q&A, page citation, cancellation. Extension ID:', id);
+} finally { await context.close(); }

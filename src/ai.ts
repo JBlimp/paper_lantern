@@ -1,4 +1,4 @@
-export type LocalTranslator = { translate(text: string, options?: { signal?: AbortSignal }): Promise<string>; destroy(): void };
+export type LocalTranslator = { translate(text: string, options?: { signal?: AbortSignal }): Promise<string>; translateBatch?(sentences: { id: string; text: string }[], context: string, signal: AbortSignal): Promise<Record<string, string>>; destroy(): void };
 type TranslatorFactory = {
   availability(options: { sourceLanguage: string; targetLanguage: string }): Promise<string>;
   create(options: { sourceLanguage: string; targetLanguage: string; monitor(monitor: EventTarget): void }): Promise<LocalTranslator>;

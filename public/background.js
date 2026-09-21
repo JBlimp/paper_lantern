@@ -12,6 +12,21 @@ chrome.action.onClicked.addListener(async tab => {
 });
 
 chrome.runtime.onConnect.addListener(port => {
+  if (port.name === 'paper-lantern-codex') {
+    const url = port.sender?.url;
+    if (port.sender?.id !== chrome.runtime.id || !url || new URL(url).pathname !== '/index.html' || !url.startsWith(chrome.runtime.getURL(''))) { port.disconnect(); return; }
+    const native = chrome.runtime.connectNative('com.paperlantern.codex');
+    let closed = false;
+    native.onMessage.addListener(message => { if (!closed) port.postMessage(message); });
+    native.onDisconnect.addListener(() => {
+      const reason = chrome.runtime.lastError?.message;
+      if (!closed) { port.postMessage({ disconnected: true, error: reason || 'Codex 연결이 종료되었습니다.' }); port.disconnect(); }
+      closed = true;
+    });
+    port.onMessage.addListener(message => { if (!closed) native.postMessage(message); });
+    port.onDisconnect.addListener(() => { closed = true; native.disconnect(); });
+    return;
+  }
   if (port.name !== 'read-tab-pdf') return;
   const sender = port.sender;
   const controller = new AbortController();

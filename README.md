@@ -4,6 +4,8 @@
 
 Chrome 내장 Translator API로 문장을 번역하고, 원문과 번역문의 위치를 연결합니다. 웹 PDF와 로컬 PDF를 지원하며, 원본 PDF 탭을 유지한 채 읽기 화면을 제공합니다.
 
+Codex를 연결하면 문맥을 활용한 번역과 논문 질문도 사용할 수 있습니다. 기본 번역 엔진은 Chrome이며, 상단에서 원하는 엔진을 선택합니다.
+
 ## 주요 기능
 
 - **영한 자동 번역** — PDF를 열면 모델 준비와 전체 페이지 번역을 시작합니다. 중단한 번역은 이어서 진행할 수 있습니다.
@@ -11,6 +13,8 @@ Chrome 내장 Translator API로 문장을 번역하고, 원문과 번역문의 �
 - **본문 중심 추출** — 반복 머리말·쪽번호·arXiv 여백 문구·그림과 표의 내부 글자·캡션을 번역에서 제외하도록 분석합니다.
 - **인용 논문 팝업** — `[12]`, `[2, 19]`, `[3–5]` 같은 인용을 클릭하면 PDF 안의 참고문헌 정보를 표시합니다.
 - **기본 리더 전환** — 왼쪽 아래 토글로 Paper Lantern과 Chrome 기본 PDF 리더를 전환합니다.
+- **Codex 번역** — 페이지 문맥을 함께 전달하고 전문 용어·알고리즘 이름을 영어로 유지하도록 번역합니다. 문장별 하이라이트는 그대로 연결됩니다.
+- **Codex 질문** — 현재 페이지, 논문 전체, 선택한 텍스트에 대해 질문합니다. 답변의 페이지 버튼으로 근거 위치를 열 수 있습니다.
 
 ## 시작하기
 
@@ -22,7 +26,7 @@ Chrome 내장 Translator API로 문장을 번역하고, 원문과 번역문의 �
 
 ### 설치
 
-**[Paper Lantern v0.1.0 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.1.0.zip)**
+**[Paper Lantern v0.2.0 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.2.0.zip)**
 
 패키지 ZIP을 받았다면 압축을 풉니다. 소스에서 설치하려면 먼저 아래 [개발](#개발)의 빌드를 실행합니다.
 
@@ -43,6 +47,20 @@ PDF 탭에 좌우 리더가 표시되고 번역을 자동으로 시도합니다.
 
 확장 아이콘은 현재 PDF 탭에 리더를 추가합니다. PDF가 아닌 탭에서는 안내 화면을 엽니다. 안내 화면의 **파일 선택 (독립 리더)**으로도 번역할 수 있지만, 이 경우 원본 PDF 탭을 유지하는 방식은 사용하지 않습니다.
 
+### Codex 연결 (선택 사항 · Windows)
+
+1. **Node.js 22.17 이상**과 **Codex**를 설치하고, Codex에서 ChatGPT 계정으로 로그인합니다.
+2. `chrome://extensions`에서 Paper Lantern의 **ID**를 복사합니다.
+3. 배포 폴더의 `companion/install.cmd`를 실행하고 복사한 ID를 입력합니다. 관리자 권한은 필요하지 않습니다.
+4. 리더의 **Codex 질문 → Codex 연결**을 누릅니다. 연결되면 모델을 선택할 수 있습니다.
+5. 번역에 사용하려면 상단에서 **Codex 번역**을 선택합니다.
+
+API 키나 상시 실행하는 서버는 필요하지 않습니다. Chrome이 연결 프로그램을 필요할 때 실행합니다. 확장 ID 또는 Codex 실행 경로가 바뀌면 설치를 다시 실행하세요. 자세한 내용은 [연결 프로그램 안내](companion/README.md)를 참고하세요.
+
+Chrome 번역은 로컬 모델, Codex는 로그인한 계정의 온라인 모델과 사용량을 이용합니다. Paper Lantern은 번역·질문 내역을 PC에 저장하지 않습니다. Codex 대화는 ephemeral thread를 사용합니다.
+
+질문은 PDF의 텍스트와 캡션을 근거로 답합니다. **그림 이미지 인식과 OCR은 아직 지원하지 않습니다.** 긴 논문은 관련 부분을 발췌해 전달하며, 전문 용어 유지와 페이지 근거의 정확성은 모델 응답에 따라 달라질 수 있습니다.
+
 ## 개발
 
 Node.js 22.17 이상과 npm을 사용합니다.
@@ -53,7 +71,7 @@ npm run build
 npm test
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. Chrome 확장 관리 화면에서 이 폴더를 로드하면 됩니다. 일반 사용자는 Node.js 설치 없이 위의 ZIP으로 설치할 수 있습니다.
+빌드 결과는 `dist/`에 생성됩니다. Chrome 확장 관리 화면에서 이 폴더를 로드하면 됩니다. Chrome 번역만 사용하는 경우 Node.js 설치 없이 위의 ZIP으로 설치할 수 있습니다.
 
 개발 화면은 `npm run dev`로 실행합니다. PDF 탭 주입과 토글은 Chrome에 확장을 로드한 상태에서 확인하세요.
 
@@ -61,17 +79,21 @@ npm test
 
 ```sh
 npm run test:e2e
+node tests/codex-ui.mjs
 node tests/bodyPipeline.mjs
 node tests/citations.mjs
 ```
 
 실제 모델과 원본 PDF 탭 통합 테스트는 `node tests/pdf-tab.mjs`로 실행합니다. 먼저 `npm run test:e2e`로 테스트 PDF를 준비하세요. 최초 모델 다운로드에는 인터넷이 필요합니다.
 
+Codex 실제 연결 테스트는 `node tests/codex-native.mjs --real`입니다. 현재 계정으로 테스트 문장의 번역·질문을 실행하며, `dist/` 확장 ID를 연결 프로그램에 등록합니다. 사용자 Chrome 프로필 대신 격리된 테스트 프로필을 사용합니다.
+
 ## 배포 파일
 
 - `src/`, `public/` — 확장 프로그램 소스
 - `tests/` — 문장 추출·인용 연결·브라우저 테스트
 - `scripts/` — 빌드 리소스 패키징과 개발 도구
+- `companion/` — Windows Codex 연결 프로그램과 설치 스크립트
 - `releases/` — 설치용 ZIP과 SHA-256 체크섬
 
 업데이트할 때는 설치 폴더의 파일을 교체한 뒤 확장 프로그램과 PDF 탭을 모두 새로고침하세요. 배포 의존성의 라이선스는 ZIP 안의 `licenses/`에 포함됩니다.
