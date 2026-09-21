@@ -31,11 +31,11 @@
     frame.setAttribute('aria-hidden', String(!enabled));
     button.setAttribute('aria-checked', String(enabled));
     button.title = enabled ? 'Paper Lantern 켜짐 · 클릭하면 Chrome PDF 리더' : 'Paper Lantern 꺼짐 · 클릭하면 번역 리더';
-    button.style.background = enabled ? '#365443' : '#777';
+    button.style.background = enabled ? '#42454c' : '#777';
     knob.style.transform = enabled ? 'translateX(18px)' : 'translateX(0)';
   }
   button.addEventListener('click', () => { enabled = !enabled; update(); });
-  button.addEventListener('focus', () => { button.style.outline = '3px solid #98bc79'; button.style.outlineOffset = '3px'; });
+  button.addEventListener('focus', () => { button.style.outline = '3px solid #91a8c8'; button.style.outlineOffset = '3px'; });
   button.addEventListener('blur', () => { button.style.outline = ''; });
   update();
 })();

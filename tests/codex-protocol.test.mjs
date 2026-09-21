@@ -10,6 +10,8 @@ test('stdio handshake, ephemeral configuration, model catalog and item completio
     assert.equal((await c.status()).models[0].id, 'test-model');
     assert.equal(await c.generate('normal', schema, '', new AbortController().signal), 'answer');
     assert.equal(await c.generate('tool', schema, '', new AbortController().signal), 'tool denied');
+    assert.equal(await c.generate('preferences', schema, '', new AbortController().signal, '내가 설정한 프롬프트'), '내가 설정한 프롬프트');
+    await assert.rejects(c.generate('normal', schema, '', new AbortController().signal, 'x'.repeat(8001)), /8,000/);
   } finally { await c.close(); }
 });
 test('cancel reaches an active Codex turn and subsequent work still succeeds', async () => {

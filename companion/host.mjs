@@ -24,7 +24,7 @@ async function handle(message) {
     if (params.model !== undefined && (typeof params.model !== 'string' || params.model.length > 100)) throw new Error('모델 형식 오류');
     const task = method === 'translate' ? translationTask(params) : method === 'ask' ? questionTask(params) : null;
     ready ??= codex.start(); await ready; controller.signal.throwIfAborted();
-    const result = task ? task.validate(JSON.parse(await codex.generate(task.prompt, task.schema, params.model, controller.signal))) : await codex.status();
+    const result = task ? task.validate(JSON.parse(await codex.generate(task.prompt, task.schema, params.model, controller.signal, params.systemPrompt))) : { ...await codex.status(), protocolVersion: 2 };
     if (!controller.signal.aborted) send({ id, result });
   } catch (error) { send({ id, error: error.message || 'Codex 요청에 실패했습니다.' }); }
   finally { running.delete(id); }

@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-let serial = 0, timer, active;
+let serial = 0, timer, active, preferences;
 const send = message => process.stdout.write(JSON.stringify(message) + '\n');
 function complete(text, status = 'completed') {
   send({ method: 'item/completed', params: { threadId: active.threadId, item: { type: 'agentMessage', text } } });
@@ -13,6 +13,7 @@ createInterface({ input: process.stdin }).on('line', line => {
   if (method === 'account/read') result({ account: { type: 'chatgpt' } });
   if (method === 'model/list') result({ data: [{ model: 'test-model', displayName: 'Test', isDefault: true }], nextCursor: null });
   if (method === 'thread/start') {
+    preferences = params.developerInstructions;
     if (!params.ephemeral || params.sandbox !== 'read-only' || params.approvalPolicy !== 'never') { send({ id, error: { message: 'Unsafe thread configuration' } }); return; }
     result({ thread: { id: 'thread-' + ++serial } });
   }
@@ -23,7 +24,7 @@ createInterface({ input: process.stdin }).on('line', line => {
     const text = params.input[0].text;
     if (text === 'crash') process.exit(1);
     else if (text === 'tool') send({ id: 900, method: 'item/commandExecution/requestApproval', params: { threadId: params.threadId } });
-    else timer = setTimeout(() => complete('answer'), text === 'hold' ? 60000 : 10);
+    else timer = setTimeout(() => complete(text === 'preferences' ? preferences : 'answer'), text === 'hold' ? 60000 : 10);
   }
   if (method === 'turn/interrupt') { clearTimeout(timer); result({}); complete('', 'interrupted'); }
   if (method === 'thread/unsubscribe') result({});

@@ -14,6 +14,9 @@ import { embedded, readTabPdf } from './pdfSource';
 import { removeLegacyCache } from './removeLegacyCache';
 import { CodexClient, type CodexModel } from './codex';
 import { CodexPanel } from './CodexPanel';
+import { CodexSettings } from './CodexSettings';
+import { readPrompts, settingsKey } from './settings';
+import { SelectionAction, type SelectionQuote } from './SelectionAction';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 function App() {
@@ -21,6 +24,9 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false), [connected, setConnected] = useState(false), [connecting, setConnecting] = useState(false);
   const [models, setModels] = useState<CodexModel[]>([]), [model, setModel] = useState(''), modelRef = useRef('');
   const codex = useRef(new CodexClient());
+  const [settingsOpen, setSettingsOpen] = useState(false), [prompts, setPrompts] = useState(readPrompts);
+  const promptsRef = useRef(prompts);
+  const [quote, setQuote] = useState<SelectionQuote | null>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null), [name, setName] = useState('');
   const [page, setPage] = useState(1);
   const [jump, setJump] = useState({ page: 1, serial: 0 });
@@ -78,10 +84,9 @@ function App() {
       // Invoked immediately by file selection/drop or retry, before PDF I/O.
       const session: LocalTranslator = providerRef.current === 'codex' ? (() => {
         if (!connected) throw new Error('Codex 질문 패널에서 먼저 연결해 주세요.');
-        const selectedModel = modelRef.current;
         return {
           translate: async () => { throw new Error('Codex는 문맥 단위로 번역합니다.'); },
-          translateBatch: (targets, context, signal) => codex.current.request<Record<string, string>>('translate', { sentences: targets.map(s => ({ id: s.id, text: s.text })), context, model: selectedModel }, signal),
+          translateBatch: (targets, context, signal) => codex.current.request<Record<string, string>>('translate', { sentences: targets.map(s => ({ id: s.id, text: s.text })), context, model: modelRef.current, systemPrompt: promptsRef.current.translation }, signal),
           destroy() {},
         };
       })() : await createTranslator(value => { if (run.current === ticket) setProgress(value); });
@@ -137,6 +142,7 @@ function App() {
     if (!file) return;
     if (file.size > 100 * 1024 * 1024) { setError('100MB 이하의 PDF를 열어 주세요.'); return; }
     stop(); const ticket = run.current;
+    setQuote(null); window.getSelection()?.removeAllRanges();
     setLoading(true); setError(''); setNotice('');
     const ready = prepare(ticket);
     try {
@@ -169,6 +175,7 @@ function App() {
     setConnecting(true); setError(''); codex.current.disconnect();
     try {
       const result = await codex.current.connect();
+      if (result.protocolVersion !== 2) throw new Error('Codex 연결 프로그램을 업데이트해 주세요. 새 배포 폴더의 companion/install.cmd를 다시 실행하면 됩니다.');
       if (!result.models.length) throw new Error('사용 가능한 Codex 모델이 없습니다.');
       setModels(result.models); const selected = result.models.find(m => m.isDefault)?.id || result.models[0].id;
       modelRef.current = selected; setModel(selected); setConnected(true);
@@ -189,6 +196,8 @@ function App() {
           else resume(mode, true);
         }}><option value="chrome">Chrome 번역</option><option value="codex">Codex 번역</option></select>
         <button onClick={() => setChatOpen(previous => !previous)} aria-pressed={chatOpen}>Codex 질문</button>
+        <button onClick={() => setSettingsOpen(true)} aria-label="Codex 설정">설정</button>
+        {provider === 'codex' && connected && <span className="model-label" title="다음 번역 요청에 사용할 모델">{models.find(m => m.id === model)?.name || model}</span>}
         {doc && <><div className="page-controls"><button aria-label="이전 페이지" disabled={page <= 1 || loading} onClick={() => navigate(page - 1)}>‹</button><span>{page} <em>/ {doc.numPages}</em></span><button aria-label="다음 페이지" disabled={page >= doc.numPages || loading} onClick={() => navigate(page + 1)}>›</button></div><select aria-label="읽기 순서" title="PDF 읽기 순서" value={mode} disabled={loading} onChange={e => { const next = e.target.value as typeof mode; setMode(next); resume(next, true); }}><option value="auto">자동</option><option value="single">1단</option><option value="double">2단</option></select></>}
         <span className="ai-status" role="status" title={status[ai]}>{preparing ? `모델 준비 중 · ${progress}%` : doc ? `${busy ? '전체 번역' : completedPages === doc.numPages ? '번역 완료' : '번역 대기'} · ${completedPages} / ${doc.numPages} 페이지` : ''}</span>
         {doc && (busy || preparing ? <button onClick={stop}>번역 중단</button> : completedPages < doc.numPages ? <button className="primary" onClick={() => resume()}>번역 이어서</button> : null)}
@@ -202,7 +211,12 @@ function App() {
           {!sentences.length && <div className="text-empty">{parsed ? '번역할 본문이 없는 페이지입니다.' : '텍스트를 분석하고 있습니다.'}<br/><small>그림·표 등은 제외됩니다. 스캔 페이지의 OCR은 아직 지원하지 않습니다.</small></div>}
           {sentences.map((sentence, index) => <article key={sentence.id} data-sentence={sentence.id} tabIndex={0} className={`sentence ${active === sentence.id ? 'active' : ''} ${translations[sentence.id] ? 'translated' : ''}`} onMouseEnter={() => setActive(sentence.id)} onMouseLeave={() => setActive(null)} onFocus={() => setActive(sentence.id)} onBlur={() => setActive(null)}><span className="sentence-number">{String(index + 1).padStart(2, '0')}</span><div>{translations[sentence.id] ? <p lang="ko" title={sentence.text}>{translations[sentence.id]}</p> : <><p lang="en" className="source-preview">{sentence.text}</p></>}</div></article>)}
         </TranslationView></section></SplitPane>
-      </section>}</div><div className="chat-container" hidden={!chatOpen}><CodexPanel doc={doc} page={page} client={codex.current} connected={connected} models={models} model={model} onModel={next => { modelRef.current = next; setModel(next); if (providerRef.current === 'codex') stop(); }} onConnect={() => void connectCodex()} connecting={connecting} onClose={() => setChatOpen(false)} navigate={navigate}/></div></div>
+      </section>}</div><div className="chat-container" hidden={!chatOpen}><CodexPanel doc={doc} page={page} client={codex.current} connected={connected} models={models} model={model} onModel={next => { modelRef.current = next; setModel(next); }} onConnect={() => void connectCodex()} connecting={connecting} onClose={() => setChatOpen(false)} navigate={navigate} quote={quote} systemPrompt={prompts.question} onDisconnect={() => { if (providerRef.current === 'codex') stop(); codex.current.disconnect(); }}/></div></div>
+      {doc && <SelectionAction key={doc.fingerprints[0]} onAsk={selection => { setQuote(selection); setChatOpen(true); }}/>}
+      {settingsOpen && <CodexSettings value={prompts} onClose={() => setSettingsOpen(false)} onSave={next => {
+        promptsRef.current = next; setPrompts(next); setSettingsOpen(false);
+        try { localStorage.setItem(settingsKey, JSON.stringify(next)); } catch { setNotice('설정은 현재 탭에 적용했지만 저장 공간에 보관하지 못했습니다.'); }
+      }}/>}
     </main>{drag && <div className="drop-overlay">PDF를 놓아 열기</div>}
   </div>;
 }

@@ -22,13 +22,19 @@ try {
   await page.getByLabel('번역 엔진').selectOption('codex');
   await page.getByRole('button', { name: 'Codex 연결', exact: true }).click();
   await expect(page.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
+  await page.getByRole('button', { name: 'Codex 설정', exact: true }).click();
+  await page.getByLabel('번역 시스템 프롬프트').fill('한국어로 번역하고 graph index라는 전문 용어는 영어 그대로 유지하세요. 각 번역문은 "번역:"으로 시작하세요.');
+  await page.getByLabel('질문 시스템 프롬프트').fill('한국어로 답하세요. 답변 본문의 첫 문장은 "근거 확인:"으로 시작하세요.');
+  await page.getByRole('button', { name: '저장', exact: true }).click();
   await page.getByLabel('PDF 파일 선택').setInputFiles('artifacts/codex-sample.pdf');
   await expect(page.locator('.ai-status')).toContainText('번역 완료', { timeout: 180000 });
   const translated = await page.locator('.sentence.translated p').allTextContents();
   expect(translated.join(' ')).toContain('graph index');
+  expect(translated[0]).toMatch(/^번역:/);
   await page.getByLabel('논문 질문').fill('어떤 index를 사용하나요?');
   await page.getByRole('button', { name: '질문', exact: true }).click();
   await expect(page.locator('.chat-message.assistant')).toHaveCount(1, { timeout: 180000 });
+  await expect(page.locator('.chat-message.assistant p')).toContainText('근거 확인:');
   await expect(page.locator('.chat-citations button')).toContainText('1쪽');
   await page.locator('.chat-citations button').click();
   await page.screenshot({ path: 'artifacts/codex-reader.png' });
@@ -44,5 +50,7 @@ try {
   await reader.getByRole('button', { name: 'Codex 질문', exact: true }).click();
   await reader.getByRole('button', { name: 'Codex 연결', exact: true }).click();
   await expect(reader.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
+  await reader.getByRole('button', { name: '연결 해제', exact: true }).click();
+  await expect(reader.getByRole('button', { name: 'Codex 연결', exact: true })).toBeVisible();
   console.log('PASS: real native messaging, ChatGPT login, model catalog, Codex translation, Q&A, page citation, cancellation. Extension ID:', id);
 } finally { await context.close(); }

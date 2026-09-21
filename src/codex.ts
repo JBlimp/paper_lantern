@@ -16,7 +16,7 @@ export class CodexClient {
       message.error ? item.reject(new Error(message.error)) : item.resolve(message.result);
     });
     port.onDisconnect.addListener(() => { void chrome.runtime.lastError; if (this.port === port) this.disconnect(new Error('Codex 연결이 종료되었습니다. 연결 프로그램 설치와 Codex 로그인을 확인해 주세요.')); });
-    return this.request<{ models: CodexModel[] }>('status', {});
+    return this.request<{ models: CodexModel[]; protocolVersion?: number }>('status', {});
   }
   request<T>(method: string, params: object, signal?: AbortSignal): Promise<T> {
     if (!this.port) return Promise.reject(new Error('먼저 Codex를 연결해 주세요.'));

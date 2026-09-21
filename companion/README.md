@@ -17,7 +17,7 @@ Codex 번역과 질문은 Codex 계정의 온라인 모델과 사용량을 이�
 
 질문에는 추출한 텍스트와 캡션을 사용합니다. 그림 이미지 자체와 OCR은 아직 지원하지 않습니다. 긴 논문은 질문과 관련된 본문 일부를 골라 전달하므로 답변의 페이지 근거를 함께 확인하세요.
 
-연결 해제는 PDF 탭을 닫으면 됩니다. 설치 등록을 제거하려면 다음 명령을 실행합니다. 설치 파일은 필요하면 위 폴더에서 직접 삭제할 수 있습니다.
+연결은 탭별로 실행됩니다. 질문 패널의 **연결 해제** 버튼이나 PDF 탭 종료 시 해당 연결 프로그램과 app-server를 종료합니다. 패널만 닫으면 연결은 유지됩니다. 시스템 프롬프트는 설정 화면에서 편집하며, 다음 요청의 Codex developer instructions로 전달합니다. 설치 등록을 제거하려면 다음 명령을 실행합니다. 설치 파일은 필요하면 위 폴더에서 직접 삭제할 수 있습니다.
 
 ```powershell
 Remove-Item -LiteralPath 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.paperlantern.codex'
