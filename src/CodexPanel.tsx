@@ -225,7 +225,7 @@ export function CodexPanel({
       </div>
       {error && (
         <p className="chat-error" role="alert">
-          {error}
+          최근 질문 실패: {error}
         </p>
       )}
       <form

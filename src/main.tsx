@@ -460,7 +460,6 @@ function App() {
       setConnecting(true);
       setConnectionError('');
       if (!silent) setError('');
-      codex.current.disconnect();
       try {
         let result;
         try {
@@ -481,14 +480,14 @@ function App() {
           result = await codex.current.connect();
         }
         if (
-          (result.protocolVersion ?? 0) < 5 &&
+          (result.protocolVersion ?? 0) < 8 &&
           typeof globalThis.chrome?.runtime?.sendMessage === 'function'
         ) {
-          await chrome.runtime.sendMessage({ type: 'paper-lantern-restart-codex' });
+          await chrome.runtime.sendMessage({ type: 'paper-lantern-restart-codex', ifIdle: true });
           codex.current.disconnect();
           result = await codex.current.connect();
         }
-        if ((result.protocolVersion ?? 0) < 5)
+        if ((result.protocolVersion ?? 0) < 8)
           throw new Error(
             `연결 프로그램 버전이 너무 오래되었습니다 (받은 버전: ${result.protocolVersion ?? '없음'}). 로컬 프로그램의 자동 연결 또는 수동 연결을 실행해 주세요.`,
           );
@@ -918,6 +917,7 @@ function App() {
         )}
         {settingsOpen && (
           <CodexSettings
+            companionVersion={codex.current.version}
             value={prompts}
             models={models}
             connected={connected}

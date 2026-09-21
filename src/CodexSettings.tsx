@@ -9,6 +9,7 @@ export function CodexSettings({
   connected,
   connecting,
   connectionError,
+  companionVersion,
   onConnect,
   onSave,
   onClose,
@@ -18,6 +19,7 @@ export function CodexSettings({
   connected: boolean;
   connecting: boolean;
   connectionError: string;
+  companionVersion?: string;
   onConnect: () => void;
   onSave: (value: Prompts) => void;
   onClose: () => void;
@@ -70,6 +72,7 @@ export function CodexSettings({
           {!connected && (
             <p>{connectionError || 'PC 연결 프로그램을 실행한 뒤 모델 목록을 불러와 주세요.'}</p>
           )}
+          {connected && companionVersion && <small>연결 프로그램 v{companionVersion}</small>}
           <ExtensionId />
           {!connected && (
             <small>

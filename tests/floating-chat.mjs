@@ -13,7 +13,7 @@ try {
       return { onMessage: { addListener(f) { messages.push(f); } }, onDisconnect: { addListener(f) { disconnected.push(f); } }, disconnect() { if (!closed) { closed = true; disconnected.forEach(f => f()); } }, postMessage(m) {
         if (m.method === 'cancel') return;
         if (m.method === 'ask') window.__asked.push(m.params);
-        const result = m.method === 'status' ? { protocolVersion: 7, models: [{ id: 'test', name: 'Test', isDefault: true }, { id: 'fast', name: 'Fast model', isDefault: false }] } : { answer: '## 핵심\n\n**강조**와 *기울임*.\n\n- 첫 항목\n- 둘째 항목\n\n> 인용문\n\n```python\nprint(1)\n```\n\n| 방법 | 값 |\n| --- | --- |\n| A | 1 |\n\n[자료](https://example.com)\n\n<script>window.injected=true</script>\n\n[위험](javascript:alert(1))', pages: [1, 2] };
+        const result = m.method === 'health' ? {state:'ready'} : m.method === 'status' ? { protocolVersion: 8, models: [{ id: 'test', name: 'Test', isDefault: true }, { id: 'fast', name: 'Fast model', isDefault: false }] } : { answer: '## 핵심\n\n**강조**와 *기울임*.\n\n- 첫 항목\n- 둘째 항목\n\n> 인용문\n\n```python\nprint(1)\n```\n\n| 방법 | 값 |\n| --- | --- |\n| A | 1 |\n\n[자료](https://example.com)\n\n<script>window.injected=true</script>\n\n[위험](javascript:alert(1))', pages: [1, 2] };
         setTimeout(() => { if (!closed) messages.forEach(f => f({ id: m.id, result })); }, 30);
       } };
     } };

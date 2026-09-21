@@ -43,7 +43,7 @@ async function handle(message) {
       send({ id, result: await library.handle(method, params) });
       return;
     }
-    if (!['status', 'translate', 'ask', 'translateDocument'].includes(method))
+    if (!['health', 'status', 'translate', 'ask', 'translateDocument'].includes(method))
       throw new Error('지원하지 않는 요청입니다.');
     if (params.model !== undefined && (typeof params.model !== 'string' || params.model.length > 100))
       throw new Error('모델 형식 오류');
@@ -59,6 +59,12 @@ async function handle(message) {
       throw new Error(
         '연결 프로그램이 트레이에서 종료되었습니다. 시작 메뉴의 Paper Lantern을 실행한 뒤 다시 연결해 주세요.',
       );
+    if (method === 'health') {
+      if (!ready || codex.closed || stopping)
+        throw new Error('Codex 연결이 종료되었습니다. 다시 연결해 주세요.');
+      send({ id, result: { state: 'ready', serverPid: process.pid } });
+      return;
+    }
     if (codex.closed) {
       const old = codex;
       codex = new Codex(config.codex);
@@ -105,7 +111,12 @@ async function handle(message) {
           throw error;
         });
       }
-      result = { ...(await statusPromise), protocolVersion: 7, serverPid: process.pid };
+      result = {
+        ...(await statusPromise),
+        protocolVersion: 8,
+        companionVersion: '0.5.1',
+        serverPid: process.pid,
+      };
       monitor.update('ready', result.models.length, running.size);
     }
     if (!controller.signal.aborted) send({ id, result });

@@ -1,5 +1,18 @@
 export type CodexModel = { id: string; name: string; isDefault: boolean };
+type CodexStatus = { models: CodexModel[]; protocolVersion?: number; companionVersion?: string };
 export class CodexClient {
+  version = '';
+  private async readHealth() {
+    const result = await this.request<{ state: string }>('health', {}, undefined, 10000);
+    if (result?.state !== 'ready')
+      throw new Error('연결 프로그램 상태를 확인할 수 없습니다. 연결 프로그램을 업데이트해 주세요.');
+  }
+  private async readStatus() {
+    const status = await this.request<CodexStatus>('status', {});
+    if ((status.protocolVersion ?? 0) >= 8) await this.readHealth();
+    this.version = status.companionVersion ?? '';
+    return status;
+  }
   private port: chrome.runtime.Port | null = null;
   private serial = 0;
   private pending = new Map<
@@ -15,7 +28,7 @@ export class CodexClient {
     clearTimeout(this.healthTimer);
     this.checkingHealth = true;
     try {
-      await this.request('status', {}, undefined, 10000);
+      await this.readHealth();
     } catch (error) {
       if (this.port === port)
         this.disconnect(error instanceof Error ? error : new Error('Codex 연결 확인에 실패했습니다.'));
@@ -28,7 +41,10 @@ export class CodexClient {
     if (document.visibilityState === 'visible') void this.checkHealth();
   };
   async connect() {
-    this.disconnect();
+    // Model refresh must not close the port used by an active question/translation.
+    if (this.port) {
+      return this.readStatus();
+    }
     if (!globalThis.chrome?.runtime?.id)
       throw new Error('Chrome에 설치한 확장 프로그램에서 Codex를 연결해 주세요.');
     const port = chrome.runtime.connect({ name: 'paper-lantern-codex' });
@@ -55,7 +71,7 @@ export class CodexClient {
         );
     });
     try {
-      const result = await this.request<{ models: CodexModel[]; protocolVersion?: number }>('status', {});
+      const result = await this.readStatus();
       if (this.port !== port) throw new Error('Codex 연결이 변경되었습니다. 다시 연결해 주세요.');
       this.healthTimer = setTimeout(this.checkHealth, 5000);
       document.addEventListener('visibilitychange', this.checkWhenVisible);
@@ -110,6 +126,7 @@ export class CodexClient {
     });
   }
   disconnect(error = new Error('Codex 연결 해제')) {
+    this.version = '';
     clearTimeout(this.healthTimer);
     document.removeEventListener('visibilitychange', this.checkWhenVisible);
     const port = this.port;

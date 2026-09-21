@@ -7,7 +7,7 @@ try {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => {
-    indexedDB.open = () => { throw new Error('Isolated UI test: storage unavailable'); }; window.__requests = []; window.__delay = 50; window.__failConnect = false;
+    indexedDB.open = () => { throw new Error('Isolated UI test: storage unavailable'); }; window.__requests = []; window.__delay = 50; window.__askDelay = 50; window.__failConnect = false;
     Object.defineProperty(window, 'Translator', { configurable: true, value: { availability: async () => 'available', create: async () => ({ translate: async text => 'Chrome: ' + text, destroy() {} }) } });
     window.chrome ??= {};
     window.chrome.runtime = { id: 'test', connect() {
@@ -20,13 +20,13 @@ try {
           // Deliberately emit even cancelled results: client must discard them.
           setTimeout(() => {
             if (closed) return;
-            let result;
+            let result = {state:'ready'};
             if (m.method === 'status' && window.__failConnect) { window.__failConnect = false; listeners.forEach(f => f({ id: m.id, error: '연결 테스트 오류' })); return; }
-            if (m.method === 'status') result = { protocolVersion: 7, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }, { id: 'question-model', name: 'Question Model', isDefault: false }] };
+            if (m.method === 'status') result = { protocolVersion: 8, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }, { id: 'question-model', name: 'Question Model', isDefault: false }] };
             if (m.method === 'translateDocument') result = { sentences: m.params.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, translation: 'Codex: ' + p.text, pages: [p.page] })) };
             if (m.method === 'ask') result = { answer: '**답변**입니다.', pages: [Math.min(2, m.params.pages.length)] };
             listeners.forEach(f => f({ id: m.id, result }));
-          }, window.__delay);
+          }, m.method === 'ask' ? window.__askDelay : window.__delay);
         }
       };
     } };
@@ -77,9 +77,16 @@ try {
   expect(await page.locator('.toolbar').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   expect(await page.locator('.codex-panel').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   await page.screenshot({ path: 'artifacts/white-reader.png' });
+  await page.evaluate(() => { window.__askDelay = 1800; });
   await page.getByLabel('논문 질문').fill('실험은?');
   await page.getByRole('button', { name: '질문', exact: true }).click();
+  await page.getByRole('button', { name: 'Codex 설정', exact: true }).click();
+  await page.getByRole('button', { name: '모델 목록 다시 불러오기' }).click();
+  await expect(page.locator('.connection-status')).toContainText('연결됨');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(page.locator('.chat-message.assistant strong')).toHaveText('답변');
+  await expect(page.locator('.codex-panel .chat-error')).toHaveCount(0);
+  await page.evaluate(() => { window.__askDelay = 50; });
   expect(await page.evaluate(() => window.__requests.filter(r => r.method === 'ask').at(-1).params.pages.length)).toBe(3);
   await page.getByRole('button', { name: '2쪽', exact: true }).click();
   await expect(page.locator('.page-controls')).toContainText('2 / 3');
