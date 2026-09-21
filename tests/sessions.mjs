@@ -28,7 +28,7 @@ try {
       return { onMessage: { addListener(f) { messages.push(f); } }, onDisconnect: { addListener(f) { disconnect.push(f); } }, disconnect() { if (!closed) { closed = true; disconnect.forEach(f => f()); } }, postMessage(m) {
         if (m.method === 'cancel') return;
         if (m.method === 'ask') window.__questions.push(m.params);
-        const result = m.method === 'health' ? {state:'ready'} : m.method === 'status' ? { protocolVersion: 8, models: [{ id: 'test', name: 'Test', isDefault: true }] } : { answer: '이전 실험에 대한 답변입니다.', pages: [2] };
+        const result = m.method === 'health' ? {state:'ready'} : m.method === 'status' ? { protocolVersion: 9, models: [{ id: 'test', name: 'Test', isDefault: true }] } : { answer: '이전 실험에 대한 답변입니다.', pages: [2] };
         setTimeout(() => { if (!closed) messages.forEach(f => f({ id: m.id, result })); }, 10);
       } };
     } };

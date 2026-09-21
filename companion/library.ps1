@@ -1,10 +1,12 @@
-﻿param([string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PaperLantern/library'), [switch]$CheckOnly, [switch]$CheckDialog, [string]$ScreenshotPath)
+﻿param([string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PaperLantern/library'), [switch]$CheckOnly, [switch]$CheckDialog, [switch]$CheckLifecycle, [string]$ScreenshotPath)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'library-store.ps1')
 . (Join-Path $PSScriptRoot 'discover-extension.ps1')
+. (Join-Path $PSScriptRoot 'app-ui.ps1')
 [Windows.Forms.Application]::EnableVisualStyles()
+[IO.Directory]::CreateDirectory($DataRoot) | Out-Null
 $created = $false
 $hash = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes([IO.Path]::GetFullPath($DataRoot)))).Replace('-','')
 $mutex = New-Object Threading.Mutex($true, "Local\PaperLanternLibrary-$hash", [ref]$created)
@@ -13,7 +15,7 @@ try {
   $script:store = Open-LibraryStore $DataRoot
   $script:group = 'all'
   $form = New-Object Windows.Forms.Form
-  $form.Text = 'Paper Lantern - Library'; $form.Size = New-Object Drawing.Size(1180,760); $form.MinimumSize = New-Object Drawing.Size(900,580); $form.StartPosition = 'CenterScreen'; $form.BackColor = [Drawing.Color]::White
+  $form.Text = 'Paper Lantern'; $form.Size = New-Object Drawing.Size(1180,760); $form.MinimumSize = New-Object Drawing.Size(900,580); $form.StartPosition = 'CenterScreen'; $form.BackColor = [Drawing.Color]::White
   $form.Font = New-Object Drawing.Font('Segoe UI',10)
   $form.AllowDrop = $true
   $toolbar = New-Object Windows.Forms.FlowLayoutPanel; $toolbar.Dock = 'Top'; $toolbar.Height = 56; $toolbar.Padding = New-Object Windows.Forms.Padding(12,10,8,8); $toolbar.BackColor = [Drawing.Color]::FromArgb(248,249,251)
@@ -96,25 +98,25 @@ try {
       $registeredPath=if(Test-Path $registryPath){(Get-Item $registryPath).GetValue('')}else{''}
       if($missing.Count -or $registeredPath -ne $manifestPath -or $Interactive){
         $setup.Enabled=$false
-        try { $null=& (Join-Path $PSScriptRoot 'install.ps1') -AutoDetect }
+        try { $null=& (Join-Path $PSScriptRoot 'install.ps1') -AutoDetect -RegisterOnly }
         finally {$setup.Enabled=$true}
       }
       if($Interactive -or $missing.Count){$connectionLabel.Text="확장 $($ids.Count)개 연결 등록 완료 · 리더가 자동으로 다시 연결합니다."}
     } catch { if($Interactive){Report-Error $_}else{$connectionLabel.Text='자동 등록 확인 필요 · 수동 연결에서 확장 ID를 입력할 수 있습니다.'} }
   }
   function Refresh-ConnectionState {
-    $runtime=Join-Path $env:LOCALAPPDATA 'PaperLantern/runtime'
-    if(Test-Path -LiteralPath (Join-Path $runtime 'paused')){$connectionLabel.Text='연결 프로그램이 중지되어 있습니다 · 자동 연결 또는 수동 연결을 눌러 주세요.';return}
-    $records=@(Get-ChildItem -LiteralPath $runtime -Filter 'host-*.json' -ErrorAction SilentlyContinue | ForEach-Object {try{$record=[IO.File]::ReadAllText($_.FullName)|ConvertFrom-Json;if(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()-$record.updatedAt)-lt5000){$record}}catch{}})
-    $ready=@($records | Where-Object state -eq 'ready')
-    if($ready.Count){$connectionLabel.Text="리더 연결됨 · 모델 $($ready[0].models)개";return}
-    if(@($records | Where-Object state -eq 'error').Count){$connectionLabel.Text='리더 연결 오류 · 확장 프로그램 설정의 오류 내용을 확인해 주세요.';return}
-    $manifest=Join-Path $env:LOCALAPPDATA 'PaperLantern/companion/com.paperlantern.codex.json'
-    if(Test-Path -LiteralPath $manifest){$connectionLabel.Text='확장 ID 등록됨 · 리더 연결 대기 (PDF 탭 또는 확장 프로그램을 열어 주세요)'}else{$connectionLabel.Text='연결 등록 필요 · 자동 연결 또는 수동 연결을 눌러 주세요.'}
-  }
-  function Resume-Connection {
-    $paused=Join-Path $env:LOCALAPPDATA 'PaperLantern/runtime/paused'
-    if(Test-Path -LiteralPath $paused){Remove-Item -LiteralPath $paused}
+    if (!$script:appService -or $script:appService.HasExited) {
+      $detail = if ($script:appServiceError -and $script:appServiceError.IsCompleted) { $script:appServiceError.Result.Trim() } else { '' }
+      $connectionLabel.Text = 'PC 서비스 중지 · 트레이에서 연결 다시 시작' + $(if($detail){' · '+$detail}else{''}); return
+    }
+    $path = Join-Path $env:LOCALAPPDATA 'PaperLantern/runtime/service.json'
+    try {
+      $state = [IO.File]::ReadAllText($path) | ConvertFrom-Json
+      if ($state.pid -eq $script:appService.Id -and ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()-$state.updatedAt) -lt 5000) {
+        $connectionLabel.Text = "PC 프로그램 실행 중 · 연결 $($state.clients)개 · 모델 $($state.models)개"; return
+      }
+    } catch {}
+    $connectionLabel.Text = 'PC 서비스 시작 중…'
   }
   $manual.add_Click({
     try {
@@ -124,13 +126,13 @@ try {
       if($null-eq$extensionId){return};$extensionId=$extensionId.Trim()
       if($extensionId-cnotmatch'^[a-p]{32}$'){throw '확장 프로그램 설정에서 복사한 ID(a~p 소문자 32자)를 입력해 주세요.'}
       $manual.Enabled=$false;$form.UseWaitCursor=$true
-      try{$null=& (Join-Path $PSScriptRoot 'install.ps1') -ExtensionId $extensionId;Resume-Connection}finally{$manual.Enabled=$true;$form.UseWaitCursor=$false}
+      try{$null=& (Join-Path $PSScriptRoot 'install.ps1') -ExtensionId $extensionId -RegisterOnly}finally{$manual.Enabled=$true;$form.UseWaitCursor=$false}
       Refresh-ConnectionState
       [Windows.Forms.MessageBox]::Show($form,'ID를 등록했습니다. 확장 프로그램 설정에서 모델 목록 다시 불러오기를 눌러 연결을 확인하세요.','수동 연결','OK','Information')|Out-Null
     } catch {Report-Error $_}
   })
-  $setup.add_Click({Resume-Connection;Connect-Extension -Interactive;Refresh-ConnectionState})
-  if(!$CheckOnly){$form.add_Shown({param($sender,$eventArgs);$sender.WindowState='Normal';$sender.BringToFront();$sender.Activate();Connect-Extension})}
+  $setup.add_Click({Connect-Extension -Interactive;Refresh-ConnectionState})
+  if(!$CheckOnly){Initialize-AppController;$form.add_Shown({param($sender,$eventArgs);$sender.WindowState='Normal';$sender.BringToFront();$sender.Activate();Connect-Extension})}
   $import.add_Click({$dialog=New-Object Windows.Forms.OpenFileDialog;$dialog.Filter='PDF (*.pdf)|*.pdf';$dialog.Multiselect=$true;try{if($dialog.ShowDialog($form)-eq'OK'){Import-Paths $dialog.FileNames}}catch{Report-Error $_}finally{$dialog.Dispose()}})
   $newFolder.add_Click({try{$name=Ask-Text '새 폴더' '';if($null-ne$name){$parent=if($group-in@('all','unfiled','trash')){''}else{$group};$folder=Add-LibraryFolder $store $name $parent;$script:group=$folder.id;Refresh-Tree}}catch{Report-Error $_}})
   $tree.add_AfterSelect({$script:group=[string]$tree.SelectedNode.Tag;Refresh-List})
@@ -151,9 +153,27 @@ try {
   foreach($control in @($form,$list)){$control.add_DragEnter($externalDrag);$control.add_DragDrop($externalDrop)}
   $tree.add_DragOver({param($sender,$e);$node=$tree.GetNodeAt($tree.PointToClient((New-Object Drawing.Point($e.X,$e.Y))));if($node-and$node.Tag-notin@('all','unfiled','trash')-and($e.Data.GetDataPresent('PaperLanternIds')-or$e.Data.GetDataPresent([Windows.Forms.DataFormats]::FileDrop))){$e.Effect=[Windows.Forms.DragDropEffects]::Copy}else{$e.Effect=[Windows.Forms.DragDropEffects]::None}})
   $tree.add_DragDrop({param($sender,$e);try{$node=$tree.GetNodeAt($tree.PointToClient((New-Object Drawing.Point($e.X,$e.Y))));if(!$node-or$node.Tag-in@('all','unfiled','trash')){return};if($e.Data.GetDataPresent('PaperLanternIds')){Set-LibraryMembership $store ([string]$e.Data.GetData('PaperLanternIds')).Split(',') $node.Tag;$tree.SelectedNode=$node;Refresh-List}else{$tree.SelectedNode=$node;Import-Paths $e.Data.GetData([Windows.Forms.DataFormats]::FileDrop)}}catch{Report-Error $_}})
-  $timer=New-Object Windows.Forms.Timer;$timer.Interval=700;$timer.add_Tick({Refresh-ConnectionState;if(!$CheckOnly -and (!$script:lastDiscovery -or ([DateTime]::UtcNow-$script:lastDiscovery).TotalSeconds -gt 15)){$script:lastDiscovery=[DateTime]::UtcNow;Connect-Extension};$index=Join-Path $DataRoot 'index.json';if(Test-Path -LiteralPath $index){$stamp=(Get-Item -LiteralPath $index).LastWriteTimeUtc.Ticks;if($stamp-ne$script:lastStamp){$script:lastStamp=$stamp;$script:store=Open-LibraryStore $DataRoot;Refresh-Tree}};$signal=Join-Path $DataRoot 'show-window';if(Test-Path -LiteralPath $signal){Remove-Item -LiteralPath $signal;$form.WindowState='Normal';$form.Show();$form.BringToFront();$form.Activate()}})
+  $timer=New-Object Windows.Forms.Timer;$timer.Interval=700;$timer.add_Tick({try{Refresh-ConnectionState;$index=Join-Path $DataRoot 'index.json';if(Test-Path -LiteralPath $index){$stamp=(Get-Item -LiteralPath $index).LastWriteTimeUtc.Ticks;if($stamp-ne$script:lastStamp){$script:store=Open-LibraryStore $DataRoot;Refresh-Tree;$script:lastStamp=$stamp}};$signal=Join-Path $DataRoot 'show-window';if(Test-Path -LiteralPath $signal){Remove-Item -LiteralPath $signal;$form.WindowState='Normal';$form.Show();$form.BringToFront();$form.Activate()}}catch{$connectionLabel.Text='상태 읽기 대기 중 · 잠시 후 다시 확인합니다.'}})
   Refresh-Tree
+  if($CheckLifecycle){Initialize-AppController}
   if($CheckOnly){$form.Show();[Windows.Forms.Application]::DoEvents();
+    if($CheckLifecycle){
+      Save-LibraryStore $store
+      $locked=[IO.File]::Open((Join-Path $DataRoot 'index.json'),[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+      $timer.Start()
+      try {
+        $until=[DateTime]::UtcNow.AddMilliseconds(900)
+        while([DateTime]::UtcNow -lt $until){[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 10}
+        if($connectionLabel.Text -notlike '상태 읽기 대기*'){throw 'Locked state must be handled without an exception dialog'}
+      } finally {$locked.Dispose();$timer.Stop()}
+      $form.Close();[Windows.Forms.Application]::DoEvents()
+      if($form.Visible -or $form.IsDisposed -or $script:appService.HasExited){throw 'Window close must hide without stopping PC service'}
+      Show-AppLibrary;[Windows.Forms.Application]::DoEvents()
+      if(!$form.Visible){throw 'Tray action must restore library window'}
+      $script:exitApp=$true;$form.Close();Close-AppController
+      if($script:appService){throw 'PC exit must release owned service'}
+      Write-Output 'PASS: one UI owns tray/service; window close hides; tray action reopens; exit stops service.'
+    }
     if($CheckDialog){
       $dialogTimer=New-Object Windows.Forms.Timer;$dialogTimer.Interval=150
       $dialogTimer.add_Tick({foreach($window in [Windows.Forms.Application]::OpenForms){if($window.Text-eq'Input regression test'){$box=$window.Controls.Find('nameBox',$false)[0];if($box){$box.Text='Verified';$window.DialogResult='OK';break}}}})
@@ -163,4 +183,4 @@ try {
 if($ScreenshotPath){$bitmap=New-Object Drawing.Bitmap($form.Width,$form.Height);$form.DrawToBitmap($bitmap,(New-Object Drawing.Rectangle(0,0,$form.Width,$form.Height)));$bitmap.Save($ScreenshotPath);$bitmap.Dispose()};$form.Close()}
   else{$timer.Start();[Windows.Forms.Application]::Run($form)}
 } catch { if($CheckOnly){throw};[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Paper Lantern','OK','Error')|Out-Null }
-finally{if($timer){$timer.Stop();$timer.Dispose()};if($form){$form.Dispose()};$mutex.ReleaseMutex();$mutex.Dispose()}
+finally{if(!$CheckOnly -or $CheckLifecycle){Close-AppController};if($timer){$timer.Stop();$timer.Dispose()};if($form){$form.Dispose()};$mutex.ReleaseMutex();$mutex.Dispose()}

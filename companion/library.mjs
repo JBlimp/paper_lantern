@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, appendFile, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, appendFile, writeFile, rm } from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -16,27 +16,8 @@ export function createLibrary(root = join(process.env.LOCALAPPDATA || '.', 'Pape
   return {
     async handle(method, params) {
       if (method === 'libraryOpen') {
-        const child = spawn(
-          'powershell.exe',
-          [
-            '-NoProfile',
-            '-STA',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-WindowStyle',
-            'Hidden',
-            '-File',
-            join(scripts, 'library.ps1'),
-            '-DataRoot',
-            root,
-          ],
-          { windowsHide: true, detached: true, stdio: 'ignore' },
-        );
-        await new Promise((resolve, reject) => {
-          child.once('spawn', resolve);
-          child.once('error', reject);
-        });
-        child.unref();
+        await mkdir(root, { recursive: true });
+        await writeFile(join(root, 'show-window'), 'show');
         return { opened: true };
       }
       if (method === 'libraryBegin') {

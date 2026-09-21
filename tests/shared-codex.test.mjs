@@ -24,16 +24,6 @@ test('shared host failure notifies all clients and later connection starts fresh
   hosts[0].disconnect(); assert(a.sent[0].disconnected); assert(b.sent[0].disconnected);
   bridge.attach(port()); assert.equal(hosts.length, 2);
 });
-test('restart discards the old host and stale replies before a new connection', () => {
-  const hosts = [], bridge = createCodexBridge(() => { const h = port(); hosts.push(h); return h; });
-  const a = port(); bridge.attach(a); a.onMessage.emit({ id: 1, method: 'status' });
-  const oldId = hosts[0].sent[0].id;
-  bridge.restart(); assert.equal(a.sent[0].disconnected, true);
-  const b = port(); bridge.attach(b); b.onMessage.emit({ id: 1, method: 'status' });
-  hosts[0].onMessage.emit({ id: oldId, result: 'obsolete' }); assert.equal(b.sent.length, 0);
-  hosts[1].onMessage.emit({ id: hosts[1].sent[0].id, result: 'current' });
-  assert.equal(b.sent[0].result, 'current');
-});
 test('queue bounds concurrency and removes cancelled waiting work', async () => {
   const queue = new RequestQueue(1);
   const release = await queue.acquire(new AbortController().signal);
@@ -42,12 +32,6 @@ test('queue bounds concurrency and removes cancelled waiting work', async () => 
   let acquired = false;
   const next = queue.acquire(new AbortController().signal).then(release => { acquired = true; return release; });
   await Promise.resolve(); assert.equal(acquired, false); release(); (await next)(); assert.equal(queue.active, 0);
-});
-
-test('automatic repair preserves active requests and restarts only when idle', () => {
- const host=port(), bridge=createCodexBridge(()=>host), client=port();bridge.attach(client);
- client.onMessage.emit({id:1,method:'ask'});assert.equal(bridge.restart(true),false);assert.equal(client.sent.length,0);
- host.onMessage.emit({id:host.sent[0].id,result:'done'});assert.equal(bridge.restart(true),true);assert.equal(client.sent.at(-1).disconnected,true);
 });
 
 // A PDF tab can close between Chrome delivering the host disconnect and our reply.
@@ -59,4 +43,10 @@ test('a dead tab cannot prevent remaining tabs from learning the host stopped', 
   closed.disconnect = () => { throw new Error('Port closed'); };
   assert.doesNotThrow(() => host.disconnect());
   assert.equal(active.sent[0].disconnected, true);
+});
+
+test('PC shutdown notice reaches every tab before native relay disconnect', () => {
+ const host=port(), bridge=createCodexBridge(()=>host), a=port(), b=port();bridge.attach(a);bridge.attach(b);
+ host.onMessage.emit({disconnected:true,error:'PC app is off'});
+ assert.equal(a.sent[0].error,'PC app is off');assert.equal(b.sent[0].error,'PC app is off');
 });

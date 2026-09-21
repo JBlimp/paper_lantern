@@ -22,7 +22,7 @@ try {
             if (closed) return;
             let result = {state:'ready'};
             if (m.method === 'status' && window.__failConnect) { window.__failConnect = false; listeners.forEach(f => f({ id: m.id, error: '연결 테스트 오류' })); return; }
-            if (m.method === 'status') result = { protocolVersion: 8, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }, { id: 'question-model', name: 'Question Model', isDefault: false }] };
+            if (m.method === 'status') result = { protocolVersion: 9, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }, { id: 'question-model', name: 'Question Model', isDefault: false }] };
             if (m.method === 'translateDocument') result = { sentences: m.params.pages.filter(p => p.text.trim()).map(p => ({ text: p.text, translation: 'Codex: ' + p.text, pages: [p.page] })) };
             if (m.method === 'ask') result = { answer: '**답변**입니다.', pages: [Math.min(2, m.params.pages.length)] };
             listeners.forEach(f => f({ id: m.id, result }));

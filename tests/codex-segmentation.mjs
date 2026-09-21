@@ -13,7 +13,7 @@ try {
       return { onMessage: { addListener(f) { listeners.push(f); } }, onDisconnect: { addListener(f) { disconnected.push(f); } }, disconnect() { if (!closed) { closed = true; disconnected.forEach(f => f()); } }, postMessage(m) {
         if (m.method === 'cancel') return;
         let result = {state:'ready'};
-        if (m.method === 'status') result = { protocolVersion: 8, models: [{ id: 'test', name: 'Test', isDefault: true }] };
+        if (m.method === 'status') result = { protocolVersion: 9, models: [{ id: 'test', name: 'Test', isDefault: true }] };
         if (m.method === 'translateDocument') {
           window.__segment++;
           result = { sentences: [

@@ -1,4 +1,4 @@
-// One native host per Chrome profile. Tabs have independent request ID spaces.
+// One lightweight relay per Chrome profile. Tabs have independent request ID spaces.
 export function createCodexBridge(connectNative) {
   let native = null,
     serial = 0;
@@ -24,6 +24,12 @@ export function createCodexBridge(connectNative) {
     native = source;
     source.onMessage.addListener((message) => {
       if (native !== source) return;
+      if (message.disconnected) {
+        native = null;
+        disconnectClients(message.error);
+        source.disconnect();
+        return;
+      }
       const request = pending.get(message.id);
       if (!request) return;
       pending.delete(message.id);
@@ -43,14 +49,6 @@ export function createCodexBridge(connectNative) {
     return source;
   }
   return {
-    restart(ifIdle = false) {
-      if (ifIdle && pending.size) return false;
-      const previous = native;
-      native = null;
-      disconnectClients('Codex 연결 프로그램을 다시 시작합니다.');
-      previous?.disconnect();
-      return true;
-    },
     attach(port) {
       const client = { port, ids: new Map() };
       clients.add(client);
@@ -77,7 +75,7 @@ export function createCodexBridge(connectNative) {
       port.onDisconnect.addListener(() => {
         clients.delete(client);
         for (const id of [...client.ids.keys()]) cancel(id);
-        // Keep the shared host alive for the next PDF tab. Chrome owns its lifetime.
+        // Keep the relay for the next tab. Only the PC app owns the service lifetime.
       });
     },
   };

@@ -149,8 +149,8 @@ export function CodexPanel({
         <div className="codex-setup">
           <p>
             {connecting
-              ? '공유 Codex에 자동 연결하고 있습니다.'
-              : 'Codex 연결 프로그램 설치 후 탭을 열면 자동으로 연결됩니다.'}
+              ? '실행 중인 PC 프로그램에 연결하고 있습니다.'
+              : '시작 메뉴에서 Paper Lantern을 실행해 주세요.'}
           </p>
           <ExtensionId />
           {connectionError && (

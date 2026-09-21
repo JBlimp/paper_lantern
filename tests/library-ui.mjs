@@ -6,7 +6,7 @@ try{
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
  window.__library=[];window.chrome??={};window.chrome.runtime={id:'test',connect(){const listeners=[];return {onMessage:{addListener(f){listeners.push(f);}},onDisconnect:{addListener(){}},disconnect(){},postMessage(m){
- let result={state:'ready'};if(m.method==='status')result={protocolVersion:8,models:[{id:'test',name:'Test',isDefault:true}]};
+ let result={state:'ready'};if(m.method==='status')result={protocolVersion:9,models:[{id:'test',name:'Test',isDefault:true}]};
  if(m.method.startsWith('library')){window.__library.push(m);result=m.method==='libraryBegin'?{id:'upload'}:{id:'paper'};}
  setTimeout(()=>listeners.forEach(f=>f({id:m.id,result})),10);
  }};}};

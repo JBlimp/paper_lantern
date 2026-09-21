@@ -32,8 +32,7 @@ function App() {
   const [connectionError, setConnectionError] = useState('');
   const [models, setModels] = useState<CodexModel[]>([]),
     modelsRef = useRef<CodexModel[]>([]);
-  const reconnectEnabled = useRef(true),
-    lastConnectionRepair = useRef(0);
+  const reconnectEnabled = useRef(true);
   const connectedRef = useRef(false),
     connectionTask = useRef<Promise<void> | null>(null);
   const codex = useRef(new CodexClient());
@@ -461,35 +460,10 @@ function App() {
       setConnectionError('');
       if (!silent) setError('');
       try {
-        let result;
-        try {
-          result = await codex.current.connect();
-        } catch (initialError) {
-          if (
-            typeof globalThis.chrome?.runtime?.sendMessage !== 'function' ||
-            Date.now() - lastConnectionRepair.current < 60000
-          )
-            throw initialError;
-          lastConnectionRepair.current = Date.now();
-          const repair = await chrome.runtime.sendMessage({
-            type: 'paper-lantern-restart-codex',
-            ifIdle: true,
-          });
-          if (!repair?.restarted) throw initialError;
-          codex.current.disconnect();
-          result = await codex.current.connect();
-        }
-        if (
-          (result.protocolVersion ?? 0) < 8 &&
-          typeof globalThis.chrome?.runtime?.sendMessage === 'function'
-        ) {
-          await chrome.runtime.sendMessage({ type: 'paper-lantern-restart-codex', ifIdle: true });
-          codex.current.disconnect();
-          result = await codex.current.connect();
-        }
-        if ((result.protocolVersion ?? 0) < 8)
+        const result = await codex.current.connect();
+        if ((result.protocolVersion ?? 0) < 9)
           throw new Error(
-            `연결 프로그램 버전이 너무 오래되었습니다 (받은 버전: ${result.protocolVersion ?? '없음'}). 로컬 프로그램의 자동 연결 또는 수동 연결을 실행해 주세요.`,
+            'PC 프로그램을 최신 버전으로 설치하고 다시 실행해 주세요. Chrome은 실행 중인 Paper Lantern에만 연결합니다.',
           );
         if (!result.models.length) throw new Error('사용 가능한 Codex 모델이 없습니다.');
         setConnectionError('');

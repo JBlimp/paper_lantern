@@ -22,7 +22,7 @@ try {
  await page.addInitScript(({real})=>{
  Object.defineProperty(window,'Translator',{value:{availability:async()=>'available',create:async()=>({translate:async text=>text,destroy(){}})}});
  if(real)return;
- window.__asked=[];window.chrome??={};window.chrome.runtime={id:'test',connect(){const listeners=[];return{onMessage:{addListener(f){listeners.push(f);}},onDisconnect:{addListener(){}},disconnect(){},postMessage(m){if(m.method==='cancel')return;if(m.method==='ask')window.__asked.push(m.params);const result=m.method==='health'?{state:'ready'}:m.method==='status'?{protocolVersion:8,models:[{id:'test',name:'Test',isDefault:true}]}:{answer:'초록색',pages:[1]};setTimeout(()=>listeners.forEach(f=>f({id:m.id,result})),20);}};}};
+ window.__asked=[];window.chrome??={};window.chrome.runtime={id:'test',connect(){const listeners=[];return{onMessage:{addListener(f){listeners.push(f);}},onDisconnect:{addListener(){}},disconnect(){},postMessage(m){if(m.method==='cancel')return;if(m.method==='ask')window.__asked.push(m.params);const result=m.method==='health'?{state:'ready'}:m.method==='status'?{protocolVersion:9,models:[{id:'test',name:'Test',isDefault:true}]}:{answer:'초록색',pages:[1]};setTimeout(()=>listeners.forEach(f=>f({id:m.id,result})),20);}};}};
  },{real});
  await page.goto(url);const tool=page.getByRole('button',{name:'이미지 설명',exact:true});await expect(tool).toBeDisabled();
  await page.getByLabel('PDF 파일 선택').setInputFiles('artifacts/figure-test.pdf');

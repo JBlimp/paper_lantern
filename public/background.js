@@ -96,12 +96,3 @@ chrome.runtime.onConnect.addListener((port) => {
       controller.abort();
     });
 });
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== 'paper-lantern-restart-codex') return;
-  if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL('index.html'))) {
-    sendResponse({ error: 'Unsupported sender' });
-    return;
-  }
-  sendResponse({ restarted: codexBridge.restart(message.ifIdle === true) });
-});
