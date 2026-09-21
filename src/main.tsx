@@ -297,17 +297,23 @@ function App() {
         const result = await translateDocument(
           units,
           document.numPages,
-          (pages) =>
+          (pages, onPartial) =>
             codex.current.request<PaperTranslation>(
               'translateDocument',
               {
+                stream: true,
                 pages,
                 model: resolveModel(promptsRef.current.translationModel, modelsRef.current),
                 systemPrompt: promptsRef.current.translation,
               },
               controller.signal,
+              undefined,
+              (progress) => {
+                if (progress.sentences) onPartial({ sentences: progress.sentences });
+              },
             ),
           controller.signal,
+          apply,
         );
         if (ticket !== run.current) return;
         apply(result);
@@ -685,7 +691,7 @@ function App() {
           )}
           <span className="ai-status" role="status" title={status[ai]}>
             {translatingPaper
-              ? '논문 전체 번역 중…'
+              ? `논문 전체 번역 중 · ${Object.keys(translations).length}개 문장 표시`
               : preparing
                 ? `모델 준비 중 · ${progress}%`
                 : doc

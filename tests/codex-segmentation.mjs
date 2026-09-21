@@ -22,15 +22,18 @@ try {
             { text: 'The algorithm stores a graph index.', translation: '그래프 인덱스', pages: [2] }
           ] };
           window.__translated.push(...result.sentences.map(s => s.text));
+          setTimeout(() => { if (!closed) listeners.forEach(f => f({id:m.id,progress:{sentences:result.sentences.slice(0,2)}})); }, 20);
         }
         if (m.method === 'translate') { window.__translated.push(...m.params.sentences.map(s => s.text)); result = Object.fromEntries(m.params.sentences.map(s => [s.id, '번역: ' + s.text])); }
-        setTimeout(() => { if (!closed) listeners.forEach(f => f({ id: m.id, result })); }, 15);
+        setTimeout(() => { if (!closed) listeners.forEach(f => f({ id: m.id, result })); }, m.method === 'translateDocument' ? 1800 : 15);
       } };
     } };
   });
   await page.goto('http://127.0.0.1:4189');
   await page.getByLabel('번역 엔진').selectOption('codex');
   await page.getByLabel('PDF 파일 선택').setInputFiles('artifacts/continuation.pdf');
+  await expect(page.locator('.sentence')).toContainText(['페이지 경계 실험', '번역: This method']);
+  await expect(page.locator('.ai-status')).toContainText('논문 전체 번역 중');
   await expect(page.locator('.ai-status')).toContainText('번역 완료');
   const sentence = 'This method uses approximate neighbor search to find similar vectors.';
   expect(await page.evaluate(() => window.__translated)).toContain(sentence);

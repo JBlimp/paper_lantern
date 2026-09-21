@@ -34,3 +34,23 @@ test('large papers are never silently split into separate model requests', async
  await translateDocument(input, 1, async pages => { calls++; assert.equal(pages[0].text.split(' ').length, 1000); return { sentences: [{ text: 'word', translation: '단어', pages: [1] }] }; }, new AbortController().signal);
  assert.equal(calls, 1);
 });
+
+test('translation stream emits only whole pairs across arbitrary escaped chunks', async () => {
+ const {translationStream}=await import('../companion/documentTranslation.mjs');
+ const sentences=[{text:'a "quoted" {word}',translation:'한글 \\ 😀',pages:[1,2]},{text:'end',translation:'끝',pages:[2]}];
+ const raw=JSON.stringify({sentences});const read=translationStream();const updates=[];
+ for(let i=1;i<=raw.length;i++){const result=read(raw.slice(0,i));if(result)updates.push(result);}
+ assert.deepEqual(updates,[{sentences:sentences.slice(0,1)},{sentences}]);
+ assert.equal(read(raw),null);
+});
+test('partial translation maps cross-page highlights before final and survives cancellation', async () => {
+ const controller=new AbortController();const updates: any[]=[];
+ const partial={sentences:[{text:'approximate search.',translation:'근사 검색',pages:[1,2]}]};
+ await assert.rejects(translateDocument(units,2,async (_pages,progress)=>{
+  progress(partial);assert.equal(updates.length,1);
+  assert.equal(updates[0].work.complete,false);
+  assert.equal(updates[0].pages[1][0].fragments.length,2);
+  controller.abort();progress(partial);return partial;
+ },controller.signal,result=>updates.push(result)));
+ assert.equal(updates.length,1);assert.equal(updates[0].translations['codex-s0'],'근사 검색');
+});

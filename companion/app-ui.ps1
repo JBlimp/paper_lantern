@@ -29,12 +29,12 @@ function Initialize-AppController {
   Start-AppService
   $script:appTray = New-Object Windows.Forms.NotifyIcon
   $script:appTray.Icon = [Drawing.SystemIcons]::Application
-  $script:appTray.Text = 'Paper Lantern v0.6.1'
+  $script:appTray.Text = 'Paper Lantern v0.6.2'
   $script:appMenu = New-Object Windows.Forms.ContextMenuStrip
   $item = $appMenu.Items.Add('라이브러리 열기'); $item.add_Click({ Show-AppLibrary })
   $item = $appMenu.Items.Add('상태 보기'); $item.add_Click({
     Refresh-ConnectionState
-    [Windows.Forms.MessageBox]::Show($form, ('Paper Lantern v0.6.1' + "`r`n" + $connectionLabel.Text + "`r`n설치: " + $PSScriptRoot), 'Paper Lantern', 'OK', 'Information') | Out-Null
+    [Windows.Forms.MessageBox]::Show($form, ('Paper Lantern v0.6.2' + "`r`n" + $connectionLabel.Text + "`r`n설치: " + $PSScriptRoot), 'Paper Lantern', 'OK', 'Information') | Out-Null
   })
   $item = $appMenu.Items.Add('Codex 연결 다시 시작'); $item.add_Click({
     try { Stop-AppService; Start-AppService; Refresh-ConnectionState } catch { Report-Error $_ }

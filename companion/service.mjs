@@ -3,7 +3,7 @@ import { Codex } from './codex.mjs';
 import { createLibrary } from './library.mjs';
 import { RequestQueue } from './queue.mjs';
 import { translationTask, questionTask, partialAnswer } from './tasks.mjs';
-import { documentTranslationTask } from './documentTranslation.mjs';
+import { documentTranslationTask, translationStream } from './documentTranslation.mjs';
 import { decoder, frame, VERSION, PROTOCOL } from './ipc.mjs';
 
 // Owned exclusively by the PC app. All Chrome profiles share this engine.
@@ -87,6 +87,7 @@ export function createService(
           await startCodex();
           controller.signal.throwIfAborted();
           if (task) {
+            const readTranslation = translationStream();
             const release = await queue.acquire(controller.signal);
             try {
               result = task.validate(
@@ -100,11 +101,23 @@ export function createService(
                     method === 'translateDocument' ? 'low' : undefined,
                     method === 'translateDocument' ? 900000 : 180000,
                     task.images,
-                    method === 'ask' && params.stream === true
+                    params.stream === true && ['ask', 'translateDocument'].includes(method)
                       ? (raw) => {
                           if (!controller.signal.aborted) {
-                            const answer = partialAnswer(raw);
-                            if (answer) send({ id, progress: { answer } });
+                            if (method === 'ask') {
+                              const answer = partialAnswer(raw);
+                              if (answer) send({ id, progress: { answer } });
+                            } else {
+                              const partial = readTranslation(raw);
+                              if (partial) {
+                                try {
+                                  task.validate(partial);
+                                } catch {
+                                  return;
+                                }
+                                send({ id, progress: partial });
+                              }
+                            }
                           }
                         }
                       : undefined,

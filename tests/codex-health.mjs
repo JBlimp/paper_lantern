@@ -13,7 +13,7 @@ try {
     console.log('PASS: real Chrome reports PC app is off without starting a service.');
   } else {
   await expect(page.locator('.connection-status')).toContainText('연결됨', { timeout: 45000 });
-  await expect(page.locator('.connection-status')).toContainText('v0.6.1');
+  await expect(page.locator('.connection-status')).toContainText('v0.6.2');
   const names = await page.getByLabel('번역 기본 모델').locator('option').allTextContents();
   expect(names.length).toBeGreaterThan(1);
   await page.getByRole('button', { name: '모델 목록 다시 불러오기' }).click();

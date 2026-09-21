@@ -117,7 +117,7 @@ export function CodexPanel({
         request.signal,
         undefined,
         ({ answer }) => {
-          if (!request.signal.aborted) setStreaming(answer);
+          if (!request.signal.aborted && typeof answer === 'string') setStreaming(answer);
         },
       );
       if (!request.signal.aborted)

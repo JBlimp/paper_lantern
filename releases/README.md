@@ -1,6 +1,6 @@
 # 설치용 패키지
 
-[Paper Lantern v0.6.1 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.6.1.zip)
+[Paper Lantern v0.6.2 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.6.2.zip)
 
 ZIP을 압축 해제한 뒤 Chrome의 `chrome://extensions`에서 **압축해제된 확장 프로그램을 로드합니다**를 선택하세요. 로컬 PDF는 확장 세부정보에서 **파일 URL에 대한 액세스 허용**을 켠 뒤 `Ctrl+O`로 엽니다.
 
@@ -21,7 +21,9 @@ v0.6.0은 PC 프로그램 하나로 라이브러리·트레이·Codex 서버 관
 `SHA256SUMS`에는 배포 ZIP의 SHA-256 체크섬이 있습니다. Windows PowerShell에서 다음 명령으로 확인할 수 있습니다.
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\paper-lantern-0.6.1.zip
+Get-FileHash -Algorithm SHA256 .\paper-lantern-0.6.2.zip
 ```
 
 v0.6.1은 Codex 질문 답변을 생성 중에도 Markdown으로 표시합니다. 적용하려면 확장과 PC 연결 프로그램을 모두 업데이트하세요.
+
+v0.6.2는 논문 전체 번역에서 완성된 원문·번역 쌍부터 표시합니다. 중단 시 받은 번역은 남지만, 다시 실행하면 논문 전체를 한 번 요청합니다. 확장과 PC 연결 프로그램을 모두 업데이트하세요.

@@ -1,3 +1,7 @@
+export type CodexProgress = {
+  answer?: string;
+  sentences?: { text: string; translation: string; pages: number[] }[];
+};
 export type CodexModel = { id: string; name: string; isDefault: boolean };
 type CodexStatus = { models: CodexModel[]; protocolVersion?: number; companionVersion?: string };
 export class CodexClient {
@@ -21,7 +25,7 @@ export class CodexClient {
       resolve: (v: any) => void;
       reject: (e: Error) => void;
       cleanup: () => void;
-      onProgress?: (value: { answer: string }) => void;
+      onProgress?: (value: CodexProgress) => void;
     }
   >();
   private healthTimer: ReturnType<typeof setTimeout> | undefined;
@@ -95,7 +99,7 @@ export class CodexClient {
     params: object,
     signal?: AbortSignal,
     timeoutMs?: number,
-    onProgress?: (value: { answer: string }) => void,
+    onProgress?: (value: CodexProgress) => void,
   ): Promise<T> {
     if (!this.port) return Promise.reject(new Error('먼저 Codex를 연결해 주세요.'));
     if (signal?.aborted) return Promise.reject(new DOMException('요청 중단', 'AbortError'));

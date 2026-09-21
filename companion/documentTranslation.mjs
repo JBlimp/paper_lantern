@@ -48,3 +48,52 @@ export function documentTranslationTask({ pages }) {
     },
   };
 }
+
+// Scan only newly arrived characters and publish complete objects, never partial JSON.
+export function translationStream() {
+  let offset = 0,
+    start = -1,
+    depth = 0,
+    quoted = false,
+    escaped = false,
+    prefix = '',
+    sentences = [];
+  return (raw) => {
+    if (!raw.startsWith(prefix)) {
+      offset = 0;
+      start = -1;
+      depth = 0;
+      quoted = false;
+      escaped = false;
+      sentences = [];
+    }
+    prefix = raw;
+    if (!offset) {
+      const match = /^\s*\{\s*"sentences"\s*:\s*\[/.exec(raw);
+      if (!match) return null;
+      offset = match[0].length;
+    }
+    const before = sentences.length;
+    for (; offset < raw.length; offset++) {
+      const c = raw[offset];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (c === '\\') escaped = true;
+        else if (c === '"') quoted = false;
+      } else if (c === '"') quoted = true;
+      else if (c === '{') {
+        if (!depth) start = offset;
+        depth++;
+      } else if (c === '}' && depth) {
+        if (--depth === 0) {
+          try {
+            sentences.push(JSON.parse(raw.slice(start, offset + 1)));
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+    return sentences.length > before ? { sentences: [...sentences] } : null;
+  };
+}
