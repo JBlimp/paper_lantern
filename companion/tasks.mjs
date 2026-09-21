@@ -114,3 +114,24 @@ export function questionTask(params) {
     },
   };
 }
+
+// Decode only complete JSON string characters; never expose JSON syntax or a split escape.
+export function partialAnswer(raw) {
+  const match = /(?:^\s*\{|,)\s*"answer"\s*:\s*"/.exec(raw);
+  if (!match) return '';
+  const start = match.index + match[0].length;
+  let end = start;
+  while (end < raw.length) {
+    if (raw[end] === '"') break;
+    if (raw[end] === '\\') {
+      const size = raw[end + 1] === 'u' ? 6 : 2;
+      if (end + size > raw.length) break;
+      end += size;
+    } else end++;
+  }
+  try {
+    return JSON.parse('"' + raw.slice(start, end) + '"').replace(/[\uD800-\uDBFF]$/, '');
+  } catch {
+    return '';
+  }
+}

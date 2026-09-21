@@ -16,6 +16,7 @@ try {
         disconnect() { if (!closed) { closed = true; disconnected.forEach(f => f()); } },
         postMessage(m) {
           window.__requests.push(m);
+          if (m.method === 'ask') setTimeout(() => listeners.forEach(f => f({id:m.id,progress:{answer:'**먼저 도착한 답변**'}})), 20);
           if (m.method === 'cancel') return;
           // Deliberately emit even cancelled results: client must discard them.
           setTimeout(() => {
@@ -80,6 +81,8 @@ try {
   await page.evaluate(() => { window.__askDelay = 1800; });
   await page.getByLabel('논문 질문').fill('실험은?');
   await page.getByRole('button', { name: '질문', exact: true }).click();
+  await expect(page.locator('.chat-message.assistant strong')).toHaveText('먼저 도착한 답변');
+  await expect(page.getByRole('button', { name: '중단', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Codex 설정', exact: true }).click();
   await page.getByRole('button', { name: '모델 목록 다시 불러오기' }).click();
   await expect(page.locator('.connection-status')).toContainText('연결됨');

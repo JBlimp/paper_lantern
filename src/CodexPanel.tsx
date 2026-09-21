@@ -52,6 +52,8 @@ export function CodexPanel({
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   onSettings: () => void;
 }) {
+  const [streaming, setStreaming] = useState('');
+  const followBottom = useRef(true);
   const [question, setQuestion] = useState(draft ?? '');
   const input = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState(false),
@@ -59,6 +61,7 @@ export function CodexPanel({
   const controller = useRef<AbortController | null>(null),
     scroll = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    setStreaming('');
     setQuestion(draft ?? '');
     setError('');
     setBusy(false);
@@ -72,13 +75,15 @@ export function CodexPanel({
     if (quote) input.current?.focus();
   }, [quote?.serial, connected]);
   useEffect(() => {
-    scroll.current?.scrollTo({ top: scroll.current.scrollHeight });
-  }, [messages, busy]);
+    if (followBottom.current) scroll.current?.scrollTo({ top: scroll.current.scrollHeight });
+  }, [messages, busy, streaming]);
   async function ask() {
     if (!doc || !connected || busy || !question.trim()) return;
     const request = new AbortController();
     controller.current = request;
     const text = question.trim();
+    setStreaming('');
+    followBottom.current = true;
     setQuestion('');
     setBusy(true);
     setError('');
@@ -100,6 +105,7 @@ export function CodexPanel({
         'ask',
         {
           question: text,
+          stream: true,
           history,
           pages: context,
           selection: focus,
@@ -109,6 +115,10 @@ export function CodexPanel({
           image: quote?.image,
         },
         request.signal,
+        undefined,
+        ({ answer }) => {
+          if (!request.signal.aborted) setStreaming(answer);
+        },
       );
       if (!request.signal.aborted)
         setMessages((previous) => [
@@ -121,7 +131,10 @@ export function CodexPanel({
         setQuestion(text);
       }
     } finally {
-      if (controller.current === request) setBusy(false);
+      if (controller.current === request) {
+        setBusy(false);
+        setStreaming('');
+      }
     }
   }
   return (
@@ -180,9 +193,20 @@ export function CodexPanel({
           )}
         </div>
       )}
-      <div className="chat-messages" ref={scroll} aria-live="polite">
+      <div
+        className="chat-messages"
+        ref={scroll}
+        aria-live="polite"
+        onScroll={() => {
+          const el = scroll.current;
+          if (el) followBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+      >
         {!messages.length && <p className="chat-empty">논문의 핵심 내용, 방법, 실험 결과를 물어보세요.</p>}
-        {messages.map((m, i) => (
+        {[
+          ...messages,
+          ...(streaming ? [{ role: 'assistant' as const, text: streaming, pages: [] }] : []),
+        ].map((m, i) => (
           <article key={i} className={`chat-message ${m.role}`}>
             <small>{m.role === 'user' ? '나' : 'Codex'}</small>
             {m.role === 'assistant' ? (

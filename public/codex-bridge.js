@@ -32,8 +32,10 @@ export function createCodexBridge(connectNative) {
       }
       const request = pending.get(message.id);
       if (!request) return;
-      pending.delete(message.id);
-      request.client.ids.delete(request.id);
+      if (!message.progress) {
+        pending.delete(message.id);
+        request.client.ids.delete(request.id);
+      }
       request.client.port.postMessage({ ...message, id: request.id });
     });
     source.onDisconnect.addListener(() => {

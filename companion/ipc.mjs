@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.6.1';
 export const PROTOCOL = 9;
 export const dataRoot = () => resolve(process.env.LOCALAPPDATA || '.', 'PaperLantern');
 export function pipeName(root = dataRoot()) {

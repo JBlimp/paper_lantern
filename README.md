@@ -31,7 +31,7 @@ Codex를 연결하면 문맥을 활용한 번역과 논문 질문도 사용할 �
 
 ### 설치
 
-**[Paper Lantern v0.6.0 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.6.0.zip)**
+**[Paper Lantern v0.6.1 다운로드](https://github.com/JBlimp/paper_lantern/raw/refs/heads/main/releases/paper-lantern-0.6.1.zip)**
 
 패키지 ZIP을 받았다면 압축을 풉니다. 소스에서 설치하려면 먼저 아래 [개발](#개발)의 빌드를 실행합니다.
 

@@ -50,3 +50,16 @@ test('PC shutdown notice reaches every tab before native relay disconnect', () =
  host.onMessage.emit({disconnected:true,error:'PC app is off'});
  assert.equal(a.sent[0].error,'PC app is off');assert.equal(b.sent[0].error,'PC app is off');
 });
+
+test('stream progress preserves request routing until final and cancellation', () => {
+ const host=port(), bridge=createCodexBridge(()=>host), a=port(), b=port();bridge.attach(a);bridge.attach(b);
+ a.onMessage.emit({id:1,method:'ask'});b.onMessage.emit({id:1,method:'ask'});
+ const [aid,bid]=host.sent.map(m=>m.id);
+ host.onMessage.emit({id:aid,progress:{answer:'first'}});
+ host.onMessage.emit({id:aid,progress:{answer:'first second'}});
+ host.onMessage.emit({id:aid,result:{answer:'final',pages:[1]}});
+ assert.equal(a.sent.length,3);assert.equal(b.sent.length,0);
+ b.onMessage.emit({method:'cancel',params:{id:1}});
+ host.onMessage.emit({id:bid,progress:{answer:'late'}});
+ assert.equal(b.sent.length,0);
+});

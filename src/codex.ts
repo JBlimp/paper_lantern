@@ -17,7 +17,12 @@ export class CodexClient {
   private serial = 0;
   private pending = new Map<
     number,
-    { resolve: (v: any) => void; reject: (e: Error) => void; cleanup: () => void }
+    {
+      resolve: (v: any) => void;
+      reject: (e: Error) => void;
+      cleanup: () => void;
+      onProgress?: (value: { answer: string }) => void;
+    }
   >();
   private healthTimer: ReturnType<typeof setTimeout> | undefined;
   private checkingHealth = false;
@@ -59,6 +64,10 @@ export class CodexClient {
       }
       const item = this.pending.get(message.id);
       if (!item) return;
+      if (message.progress) {
+        item.onProgress?.(message.progress);
+        return;
+      }
       item.cleanup();
       this.pending.delete(message.id);
       message.error ? item.reject(new Error(message.error)) : item.resolve(message.result);
@@ -81,7 +90,13 @@ export class CodexClient {
       throw error;
     }
   }
-  request<T>(method: string, params: object, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
+  request<T>(
+    method: string,
+    params: object,
+    signal?: AbortSignal,
+    timeoutMs?: number,
+    onProgress?: (value: { answer: string }) => void,
+  ): Promise<T> {
     if (!this.port) return Promise.reject(new Error('먼저 Codex를 연결해 주세요.'));
     if (signal?.aborted) return Promise.reject(new DOMException('요청 중단', 'AbortError'));
     return new Promise((resolve, reject) => {
@@ -112,6 +127,7 @@ export class CodexClient {
       this.pending.set(id, {
         resolve,
         reject,
+        onProgress,
         cleanup: () => {
           clearTimeout(timer);
           signal?.removeEventListener('abort', cancel);

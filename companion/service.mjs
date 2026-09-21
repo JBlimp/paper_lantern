@@ -2,7 +2,7 @@ import { createServer } from 'node:net';
 import { Codex } from './codex.mjs';
 import { createLibrary } from './library.mjs';
 import { RequestQueue } from './queue.mjs';
-import { translationTask, questionTask } from './tasks.mjs';
+import { translationTask, questionTask, partialAnswer } from './tasks.mjs';
 import { documentTranslationTask } from './documentTranslation.mjs';
 import { decoder, frame, VERSION, PROTOCOL } from './ipc.mjs';
 
@@ -100,6 +100,14 @@ export function createService(
                     method === 'translateDocument' ? 'low' : undefined,
                     method === 'translateDocument' ? 900000 : 180000,
                     task.images,
+                    method === 'ask' && params.stream === true
+                      ? (raw) => {
+                          if (!controller.signal.aborted) {
+                            const answer = partialAnswer(raw);
+                            if (answer) send({ id, progress: { answer } });
+                          }
+                        }
+                      : undefined,
                   ),
                 ),
               );

@@ -37,3 +37,17 @@ test('selected figure uses image input alongside text', async () => {
  assert.deepEqual(JSON.parse(result),{type:'image',url});
  } finally {await c.close();}
 });
+
+test('streamed answer decodes split escapes and arrives before turn completion', async () => {
+ const {partialAnswer}=await import('../companion/tasks.mjs');
+ const answer='**한국어**\n"quote" \\ path 😀';
+ const raw=JSON.stringify({answer,pages:[1]});
+ for(let i=0;i<=raw.length;i++) assert(answer.startsWith(partialAnswer(raw.slice(0,i))));
+ assert.equal(partialAnswer(raw),answer);
+ const c=await setup();const chunks=[];
+ try {
+  let complete=false;
+  const result=c.generate('stream',schema,'',new AbortController().signal,'',undefined,180000,[],text=>{assert.equal(complete,false);chunks.push(text);}).then(text=>{complete=true;return text;});
+  assert.equal(await result,'first second');assert.deepEqual(chunks,['first','first second']);
+ } finally {await c.close();}
+});

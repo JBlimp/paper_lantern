@@ -104,6 +104,14 @@ export class Codex {
       task.turnId = p.turn.id;
       if (task.cancelled) this.interrupt(p.threadId, task);
     }
+    if (message.method === 'item/agentMessage/delta' && typeof p.delta === 'string') {
+      if (task.itemId !== p.itemId) {
+        task.itemId = p.itemId;
+        task.partial = '';
+      }
+      task.partial = (task.partial || '') + p.delta;
+      if (!task.cancelled) task.onText?.(task.partial);
+    }
     if (message.method === 'item/completed' && p.item.type === 'agentMessage') task.text = p.item.text;
     if (message.method === 'turn/completed') {
       const text = p.turn.items?.filter((i) => i.type === 'agentMessage').at(-1)?.text || task.text;
@@ -132,7 +140,17 @@ export class Codex {
     } while (cursor);
     return { models };
   }
-  async generate(prompt, schema, model, signal, systemPrompt = '', effort, timeoutMs = 180000, images = []) {
+  async generate(
+    prompt,
+    schema,
+    model,
+    signal,
+    systemPrompt = '',
+    effort,
+    timeoutMs = 180000,
+    images = [],
+    onText,
+  ) {
     if (typeof systemPrompt !== 'string' || systemPrompt.length > 8000)
       throw new Error('시스템 프롬프트는 8,000자 이내로 입력해 주세요.');
     signal.throwIfAborted();
@@ -159,7 +177,7 @@ export class Codex {
           this.interrupt(thread.id, task);
           finish(reject, new Error('요청이 중단되었습니다.'));
         };
-        task = { resolve: (text) => finish(resolve, text), reject: (e) => finish(reject, e) };
+        task = { onText, resolve: (text) => finish(resolve, text), reject: (e) => finish(reject, e) };
         task.timer = setTimeout(() => {
           task.cancelled = true;
           this.interrupt(thread.id, task);

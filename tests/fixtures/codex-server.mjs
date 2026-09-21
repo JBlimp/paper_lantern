@@ -24,6 +24,11 @@ createInterface({ input: process.stdin }).on('line', line => {
     const text = params.input[0].text;
     if (text === 'crash') process.exit(1);
     else if (text === 'tool') send({ id: 900, method: 'item/commandExecution/requestApproval', params: { threadId: params.threadId } });
+    else if (text === 'stream') {
+      send({method:'item/agentMessage/delta',params:{threadId:params.threadId,itemId:'answer',delta:'first'}});
+      send({method:'item/agentMessage/delta',params:{threadId:params.threadId,itemId:'answer',delta:' second'}});
+      timer=setTimeout(()=>complete('first second'),50);
+    }
     else timer = setTimeout(() => complete(text === 'image' ? JSON.stringify(params.input[1]) : text === 'preferences' ? preferences : 'answer'), text === 'hold' ? 60000 : 10);
   }
   if (method === 'turn/interrupt') { clearTimeout(timer); result({}); complete('', 'interrupted'); }
