@@ -64,3 +64,29 @@ $shortcut.Arguments = '"' + (Join-Path $targetDir 'start.vbs') + '"'
 $shortcut.WorkingDirectory = $targetDir
 $shortcut.Description = 'Paper Lantern connection manager'
 $shortcut.Save()
+
+# Replacing files does not replace scripts already loaded in memory.
+# Restart only this installed companion's processes, never the Codex desktop app.
+$trayPath = Join-Path $targetDir 'tray.ps1'
+$hostPath = Join-Path $targetDir 'host.mjs'
+$runningCompanion = @(Get-CimInstance Win32_Process | Where-Object {
+  ($_.Name -eq 'powershell.exe' -and $_.CommandLine -and $_.CommandLine.IndexOf(('"' + $trayPath + '"'), [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+  ($_.Name -eq 'node.exe' -and $_.CommandLine -and $_.CommandLine.IndexOf(('"' + $hostPath + '"'), [StringComparison]::OrdinalIgnoreCase) -ge 0)
+})
+$hadTray = @($runningCompanion | Where-Object Name -eq 'powershell.exe').Count -gt 0
+foreach ($process in $runningCompanion) {
+  if ($process.Name -eq 'node.exe') {
+    # Include only children of our native host so its app-server cannot be orphaned.
+    $current = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $process.ProcessId)
+    if ($current -and $current.CreationDate -eq $process.CreationDate) {
+      $stopper = Start-Process -FilePath "$env:WINDIR\System32\taskkill.exe" -ArgumentList @('/PID', $process.ProcessId, '/T', '/F') -WindowStyle Hidden -Wait -PassThru
+      if ($stopper.ExitCode -ne 0 -and (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue)) { throw '기존 연결 프로그램을 종료하지 못했습니다. 트레이에서 종료한 뒤 다시 설치해 주세요.' }
+    }
+  } else {
+    Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
+  }
+}
+if ($hadTray -and !(Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'PaperLantern/runtime/paused'))) {
+  Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $trayPath + '"') -WindowStyle Hidden
+}
+Write-Host 'Updated running Paper Lantern processes. Existing PDF tabs can reconnect.'

@@ -114,7 +114,7 @@ async function handle(message) {
       result = {
         ...(await statusPromise),
         protocolVersion: 8,
-        companionVersion: '0.5.1',
+        companionVersion: '0.5.2',
         serverPid: process.pid,
       };
       monitor.update('ready', result.models.length, running.size);

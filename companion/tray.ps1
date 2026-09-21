@@ -27,7 +27,8 @@ try {
   $graphics.DrawLine([System.Drawing.Pens]::Gold,13,27,19,27)
   $nativeIcon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
   $icon.Icon = $nativeIcon
-  $icon.Text = 'Paper Lantern - Ready'
+  $icon.Text = 'Paper Lantern v0.5.2 - Ready'
+  $trayRecord = Join-Path $runtimeDir ('tray-' + $PID + '.json')
   $statusItem = $menu.Items.Add('연결 대기 중'); $statusItem.Enabled = $false
   $libraryItem = $menu.Items.Add('라이브러리 열기')
   $libraryItem.Tag = Join-Path $PSScriptRoot 'library.ps1'
@@ -44,7 +45,7 @@ try {
   $null = $menu.Items.Add('-')
   $quit = $menu.Items.Add('연결 프로그램 종료')
   $details.add_Click({
-    $lines = @('Paper Lantern 연결 프로그램', '', 'Chrome에서 PDF를 열면 Codex 서버에 연결합니다.')
+    $lines = @('Paper Lantern 연결 프로그램 v0.5.2', '', 'Chrome에서 PDF를 열면 Codex 서버에 연결합니다.')
     $records = @(Get-ChildItem -LiteralPath $runtimeDir -Filter 'host-*.json' | ForEach-Object { try { $r = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json; if (([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $r.updatedAt) -lt 5000) { $r } } catch {} })
     foreach ($record in $records) { $lines += "PID $($record.pid) | $($record.state) | 모델 $($record.models)개 | 요청 $($record.active)개" }
     if (!$records.Count) { $lines += '현재 연결된 Chrome 서버가 없습니다.' }
@@ -67,11 +68,14 @@ try {
     $records = @(Get-ChildItem -LiteralPath $runtimeDir -Filter 'host-*.json' | ForEach-Object { try { $r = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json; if (([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - $r.updatedAt) -lt 5000) { $r } } catch {} })
     $ready = @($records | Where-Object state -eq 'ready').Count
     $statusItem.Text = if ($ready) { "연결됨 · 서버 $ready 개" } elseif ($records.Count) { '연결 확인 필요 · 상태 보기' } else { '연결 대기 중' }
-    $icon.Text = "Paper Lantern - $ready connected"
+    $icon.Text = "Paper Lantern v0.5.2 - $ready connected"
+    # Readiness diagnostics reflect the live menu, not merely the file on disk.
+    [IO.File]::WriteAllText($trayRecord, (@{ pid=$PID; version='0.5.2'; updatedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); menu=@($menu.Items | ForEach-Object Text) } | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
   })
   if ($CheckLibraryLaunch) { $libraryItem.PerformClick() }
   if (!$CheckOnly) { $icon.Visible = $true; $timer.Start(); [System.Windows.Forms.Application]::Run() }
 } finally {
+  if ($trayRecord -and (Test-Path -LiteralPath $trayRecord)) { Remove-Item -LiteralPath $trayRecord -ErrorAction SilentlyContinue }
   $timer.Stop(); $timer.Dispose(); $icon.Visible = $false; $icon.Dispose(); $menu.Dispose()
   if ($graphics) { $graphics.Dispose(); $brush.Dispose(); $nativeIcon.Dispose(); $bitmap.Dispose() }
   $mutex.ReleaseMutex(); $mutex.Dispose()
