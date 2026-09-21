@@ -62,7 +62,7 @@ try {
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.locator('.sentence')).toHaveCount(6);
   await page.evaluate(() => { window.__failModel = false; window.__delay = 20; });
-  await page.getByRole('button', { name: '번역 이어서', exact: true }).click();
+  await page.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(page.locator('.ai-status')).toContainText('번역 완료 · 3 / 3 페이지');
   const originalSentences = await page.locator('.sentence p').evaluateAll(es => es.map(e => e.title || e.textContent));
   const originalViewport = await page.evaluate(() => ({ width: innerWidth, scale: devicePixelRatio }));
@@ -130,7 +130,7 @@ try {
   const stoppedCalls = await page.evaluate(() => window.__calls);
   await page.waitForTimeout(350);
   expect(await page.evaluate(() => window.__calls)).toBe(stoppedCalls);
-  await page.getByRole('button', { name: '번역 이어서', exact: true }).click();
+  await page.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(page.locator('.ai-status')).toContainText('번역 완료 · 3 / 3 페이지');
   await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
   await expect(page.locator('.sentence')).toHaveCount(0);

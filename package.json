@@ -1,18 +1,22 @@
 {
   "name": "paper-lantern",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build && node scripts/package.mjs",
-    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/bodyFilter.test.ts tests/references.test.ts tests/codex.test.ts tests/codex-protocol.test.mjs tests/pageContinuations.test.ts tests/shared-codex.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/bodyFilter.test.ts tests/references.test.ts tests/codex.test.ts tests/codex-protocol.test.mjs tests/pageContinuations.test.ts tests/shared-codex.test.mjs tests/runtime.test.mjs tests/segmentation.test.ts",
+    "test:e2e": "node tests/e2e.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"public/*.js\" \"companion/*.mjs\" \"scripts/*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"public/*.js\" \"companion/*.mjs\" \"scripts/*.mjs\""
   },
   "dependencies": {
     "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -20,6 +24,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "pdf-lib": "^1.17.1",
+    "prettier": "3.6.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
   },

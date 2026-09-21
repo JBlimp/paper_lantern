@@ -29,3 +29,11 @@ test('app-server crash rejects pending inference without hanging', async () => {
   try { await assert.rejects(c.generate('crash', schema, '', new AbortController().signal), /종료/); }
   finally { await c.close(); }
 });
+
+test('selected figure uses image input alongside text', async () => {
+ const c = await setup();
+ try { const url='data:image/jpeg;base64,/9j/AA==';
+ const result=await c.generate('image',schema,'',new AbortController().signal,'',undefined,180000,[url]);
+ assert.deepEqual(JSON.parse(result),{type:'image',url});
+ } finally {await c.close();}
+});

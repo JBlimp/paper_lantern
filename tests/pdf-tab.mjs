@@ -30,11 +30,11 @@ try {
     await expect(page.locator('#paper-lantern-reader')).toHaveCount(1);
     await expect(reader.getByRole('button', { name: '파일 선택 (독립 리더)' })).toHaveCount(0);
     // A new profile may require a user gesture to download its first language model.
-    await expect.poll(async () => (await reader.locator('.ai-status').innerText()).includes('번역 완료') || await reader.getByRole('button', { name: '번역 이어서', exact: true }).isVisible(), { timeout: 60000 }).toBe(true);
-    if (await reader.getByRole('button', { name: '번역 이어서', exact: true }).count()) {
-      await reader.getByRole('button', { name: '번역 이어서', exact: true }).click();
+    await expect.poll(async () => (await reader.locator('.ai-status').innerText()).includes('번역 완료') || await reader.getByRole('button', { name: '새로고침', exact: true }).isVisible(), { timeout: 60000 }).toBe(true);
+    if (await reader.getByRole('button', { name: '새로고침', exact: true }).count()) {
+      await reader.getByRole('button', { name: '새로고침', exact: true }).click();
     }
-    await expect.poll(async () => (await reader.locator('.ai-status').innerText()).includes('번역 완료') || await reader.getByRole('button', { name: '번역 이어서', exact: true }).isVisible(), { timeout: 60000 }).toBe(true);
+    await expect.poll(async () => (await reader.locator('.ai-status').innerText()).includes('번역 완료') || await reader.getByRole('button', { name: '새로고침', exact: true }).isVisible(), { timeout: 60000 }).toBe(true);
     console.log('Translation result:', await reader.locator('.ai-status').innerText(), await reader.locator('[role=alert]').allTextContents());
     await expect(reader.locator('.ai-status')).toContainText('번역 완료');
     await expect(reader.locator('[role=alert]')).toHaveCount(0);

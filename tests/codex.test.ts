@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { translationTask, questionTask } from '../companion/tasks.mjs';
-import { questionContext } from '../src/codex.ts';
 
 test('translation rejects missing, duplicate, invented and blank sentence results', () => {
   const task = translationTask({ sentences: [{ id: 'p1-s1', text: 'Hello.' }, { id: 'p1-s2', text: 'World.' }] });
@@ -14,11 +13,24 @@ test('questions reject citations outside supplied context and oversize inputs', 
   assert.throws(() => task.validate({ answer: '가짜 근거', pages: [2] }));
   assert.throws(() => questionTask({ question: 'x', pages: [{ page: 1, text: 'x'.repeat(160001) }] }));
 });
-test('long-document retrieval includes matches late in paper with bounded context', () => {
-  const pages = Array.from({ length: 120 }, (_, i) => ({ page: i + 1, text: 'unrelated content. '.repeat(1000) }));
-  pages[115].text += 'UNIQUE_METHOD answers the question here.';
-  const context = questionContext(pages, 'Explain UNIQUE_METHOD', 2);
-  assert(context.some(p => p.page === 116 && p.text.includes('UNIQUE_METHOD')));
-  assert(context.reduce((n, p) => n + p.text.length, 0) < 90000);
-  assert(context.every(p => p.text.startsWith('[발췌')));
+test('selected passage is a focus alongside whole-paper evidence and cannot exceed its limit', () => {
+  const params = { question: '이 부분을 설명해줘', pages: [{ page: 1, text: 'Introduction defines the method.' }, { page: 2, text: 'Selected result.' }, { page: 3, text: 'Other experiments.' }], selection: [{ page: 2, text: 'Selected result.' }], coverage: 'full' };
+  const task = questionTask(params);
+  const data = JSON.parse(task.prompt.split('Data:\n')[1]);
+  assert.deepEqual(data.documentPages, params.pages);
+  assert.deepEqual(data.selectedPassages, params.selection);
+  assert.equal(data.documentCoverage, 'full');
+  assert.deepEqual(task.validate({ answer: 'Introduction explains the result.', pages: [1, 2] }).pages, [1, 2]);
+  assert.throws(() => questionTask({ ...params, selection: [{ page: 2, text: 'x'.repeat(12001) }] }));
+  assert.throws(() => questionTask({ ...params, selection: [{ page: -1, text: 'x' }] }));
+  assert.throws(() => questionTask({ ...params, coverage: 'invented' }));
+});
+
+test('figure questions attach image pixels separately from the full-paper prompt', () => {
+ const pages = [{page:1,text:'Paper context'}], image = {page:1,dataUrl:'data:image/jpeg;base64,/9j/AA=='};
+ const task = questionTask({question:'Describe the figure',pages,image});
+ assert.deepEqual(task.images,[image.dataUrl]);
+ assert(!task.prompt.includes(image.dataUrl));
+ assert.equal(JSON.parse(task.prompt.split('Data:\n')[1]).selectedImagePage,1);
+ for (const invalid of [{...image,page:2},{...image,dataUrl:'https://example.com/x.jpg'},{...image,dataUrl:'data:image/jpeg;base64,YWJj'}]) assert.throws(()=>questionTask({question:'x',pages,image:invalid}));
 });
