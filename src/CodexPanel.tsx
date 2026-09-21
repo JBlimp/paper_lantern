@@ -3,23 +3,25 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { rawPage } from './readPage';
 import { CodexClient, questionContext, type CodexModel } from './codex';
 import { selectedPdfPages, type SelectionQuote } from './SelectionAction';
+import type { ChatMessage } from './sessions';
+import type { Dispatch, SetStateAction } from 'react';
 
-type Message = { role: 'user' | 'assistant'; text: string; pages?: number[] };
 function AnswerText({ text }: { text: string }) {
   return <>{text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : part)}</>;
 }
-export function CodexPanel({ doc, page, client, connected, models, model, onModel, onConnect, connecting, onClose, navigate, quote, systemPrompt, onDisconnect }: {
+export function CodexPanel({ doc, page, client, connected, models, model, onConnect, connecting, onClose, navigate, quote, systemPrompt, onDisconnect, messages, setMessages, onSettings }: {
   doc: PDFDocumentProxy | null; page: number; client: CodexClient; connected: boolean; models: CodexModel[]; model: string;
-  onModel: (model: string) => void; onConnect: () => void; connecting: boolean; onClose: () => void; navigate: (page: number) => void;
+  onConnect: () => void; connecting: boolean; onClose: () => void; navigate: (page: number) => void;
   quote: SelectionQuote | null; systemPrompt: string; onDisconnect: () => void;
+  messages: ChatMessage[]; setMessages: Dispatch<SetStateAction<ChatMessage[]>>; onSettings: () => void;
 }) {
-  const [messages, setMessages] = useState<Message[]>([]), [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState('');
   const [scope, setScope] = useState('page'), [selection, setSelection] = useState('');
   const [selectionPage, setSelectionPage] = useState(1);
   const selectedPages = useRef<SelectionQuote['pages']>([]), input = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null), scroll = useRef<HTMLDivElement>(null);
-  useEffect(() => { setMessages([]); setQuestion(''); setSelection(''); selectedPages.current = []; setError(''); setBusy(false); controller.current?.abort(); return () => controller.current?.abort(); }, [doc]);
+  useEffect(() => { setQuestion(''); setSelection(''); selectedPages.current = []; setError(''); setBusy(false); controller.current?.abort(); return () => controller.current?.abort(); }, [doc]);
   useEffect(() => {
     if (!quote) return;
     selectedPages.current = quote.pages; setSelection(quote.pages.map(p => p.text).join('\n')); setSelectionPage(quote.pages[0].page); setScope('selection');
@@ -66,7 +68,7 @@ export function CodexPanel({ doc, page, client, connected, models, model, onMode
   }
   return <aside className="codex-panel" aria-label="Codex 질문">
     <header><strong>Codex</strong><span>{connected ? '연결됨' : '연결 안 됨'}</span>{connected && <button className="disconnect-button" onClick={() => { controller.current?.abort(); setBusy(false); onDisconnect(); }}>연결 해제</button>}<button onClick={onClose} aria-label="Codex 패널 닫기">×</button></header>
-    {!connected ? <div className="codex-setup"><p>Codex 연결 프로그램을 설치한 뒤 연결하세요.</p><p>확장 ID <code>{globalThis.chrome?.runtime?.id || '확장 프로그램에서 열어 주세요'}</code></p><p>배포 폴더의 <code>companion/install.cmd</code>를 실행하고 이 ID를 입력하세요. Codex 로그인이 필요합니다.</p><button onClick={onConnect} disabled={connecting}>{connecting ? '연결 중…' : 'Codex 연결'}</button></div> : <div className="codex-options"><select aria-label="Codex 모델" value={model} disabled={busy} onChange={e => onModel(e.target.value)}>{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select><select aria-label="질문 범위" value={scope} onChange={e => setScope(e.target.value)}><option value="page">현재 페이지</option><option value="paper">논문 전체</option><option value="selection">선택한 텍스트</option></select></div>}
+    {!connected ? <div className="codex-setup"><p>{connecting ? '공유 Codex에 자동 연결하고 있습니다.' : 'Codex 연결 프로그램 설치 후 탭을 열면 자동으로 연결됩니다.'}</p><p>확장 ID <code>{globalThis.chrome?.runtime?.id || '확장 프로그램에서 열어 주세요'}</code></p><p>배포 폴더의 <code>companion/install.cmd</code>를 실행하고 이 ID를 입력하세요. Codex 로그인이 필요합니다.</p><button onClick={onConnect} disabled={connecting}>{connecting ? '연결 중…' : 'Codex 연결'}</button></div> : <div className="codex-options"><button className="question-model" title="질문 기본 모델 설정" onClick={onSettings}>{models.find(m => m.id === model)?.name || model}</button><select aria-label="질문 범위" value={scope} onChange={e => setScope(e.target.value)}><option value="page">현재 페이지</option><option value="paper">논문 전체</option><option value="selection">선택한 텍스트</option></select></div>}
     {scope === 'selection' && <div className="selection-preview">{selection || 'PDF 또는 번역문에서 텍스트를 드래그해 선택하세요.'}</div>}
     <div className="chat-messages" ref={scroll} aria-live="polite">
       {!messages.length && <p className="chat-empty">논문의 핵심 내용, 방법, 실험 결과를 물어보세요.</p>}

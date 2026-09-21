@@ -2,6 +2,7 @@ import { OPS, Util, type PDFDocumentProxy } from 'pdfjs-dist';
 import { extractSentences, type Word, type Sentence } from './layout';
 import { buildBodyProfile, filterBody, type BodyProfile, type Rect } from './bodyFilter';
 import { graphicRegions } from './graphics';
+import { linkPageContinuations } from './pageContinuations';
 
 type Mode = 'auto' | 'single' | 'double';
 type Structure = { role?: string; type?: string; id?: string; children?: Structure[] };
@@ -34,11 +35,11 @@ async function loadText(doc: PDFDocumentProxy, number: number) {
   return { page, base, content, words, taggedExcluded, width: base.width, height: base.height };
 }
 type AnalyzedPage = { content: Awaited<ReturnType<typeof loadText>>['content']; sentences: Sentence[]; excluded: Map<number,string>; graphics: Rect[] };
-type DocumentCache = { raw: Map<number, ReturnType<typeof loadText>>; profile?: Promise<BodyProfile>; analyzed: Map<string, Promise<AnalyzedPage>> };
+type DocumentCache = { raw: Map<number, ReturnType<typeof loadText>>; profile?: Promise<BodyProfile>; analyzed: Map<string, Promise<AnalyzedPage>>; linked: Map<Mode, Promise<AnalyzedPage[]>> };
 const documents = new WeakMap<PDFDocumentProxy, DocumentCache>();
 function cacheFor(doc: PDFDocumentProxy): DocumentCache {
   let cache = documents.get(doc);
-  if (!cache) { cache = { raw: new Map(), analyzed: new Map() }; documents.set(doc, cache); }
+  if (!cache) { cache = { raw: new Map(), analyzed: new Map(), linked: new Map() }; documents.set(doc, cache); }
   return cache;
 }
 export function rawPage(doc: PDFDocumentProxy, number: number): ReturnType<typeof loadText> {
@@ -65,11 +66,27 @@ async function analyze(doc: PDFDocumentProxy, number: number, mode: Mode): Promi
   return { content: raw.content, sentences: extractSentences(raw.words, number, raw.width, mode, raw.height, context), excluded: filtered.excluded, graphics };
 }
 // Original text indices survive filtering, keeping source highlighting aligned.
-export function readPage(doc: PDFDocumentProxy, page: number, mode: Mode) {
+function unlinkedPage(doc: PDFDocumentProxy, page: number, mode: Mode) {
   const cache = cacheFor(doc), key = `${mode}:${page}`;
   if (!cache.analyzed.has(key)) {
     const task = analyze(doc, page, mode); cache.analyzed.set(key, task);
     void task.catch(() => cache.analyzed.delete(key));
   }
   return cache.analyzed.get(key)!;
+}
+export async function readPage(doc: PDFDocumentProxy, page: number, mode: Mode) {
+  const cache = cacheFor(doc);
+  if (!cache.linked.has(mode)) {
+    const task = (async () => {
+      const analyzed = [], metadata = [];
+      for (let number = 1; number <= doc.numPages; number++) {
+        const result = await unlinkedPage(doc, number, mode), raw = await rawPage(doc, number);
+        analyzed.push(result); metadata.push({ number, height: raw.height, words: raw.words, sentences: result.sentences });
+      }
+      const linked = linkPageContinuations(metadata);
+      return analyzed.map((result, index) => ({ ...result, sentences: linked[index] }));
+    })();
+    cache.linked.set(mode, task); void task.catch(() => cache.linked.delete(mode));
+  }
+  return (await cache.linked.get(mode)!)[page - 1];
 }

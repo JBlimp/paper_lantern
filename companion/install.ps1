@@ -18,7 +18,7 @@ if (!$CodexPath) {
 if (!$CodexPath -or !(Test-Path -LiteralPath $CodexPath -PathType Leaf) -or [IO.Path]::GetExtension($CodexPath) -ne '.exe') { throw 'Install Codex first, or pass -CodexPath with the full path to codex.exe.' }
 $targetDir = Join-Path $env:LOCALAPPDATA 'PaperLantern/companion'
 New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-foreach ($file in @('host.mjs', 'codex.mjs', 'tasks.mjs')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $targetDir -Force }
+foreach ($file in @('host.mjs', 'codex.mjs', 'tasks.mjs', 'queue.mjs')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $targetDir -Force }
 @{ codex = (Resolve-Path -LiteralPath $CodexPath).Path } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $targetDir 'config.json') -Encoding utf8
 # Strip the UTF-8 BOM for Node JSON.parse (Windows PowerShell 5.1 writes one).
 $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -36,4 +36,4 @@ $manifest = @{ name = 'com.paperlantern.codex'; description = 'Paper Lantern Cod
 $reg = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.paperlantern.codex'
 New-Item -Path $reg -Force | Out-Null
 Set-Item -Path $reg -Value $manifestPath
-Write-Host 'Installed. Open Paper Lantern and click Codex connect.'
+Write-Host 'Installed. Reload Paper Lantern. PDF tabs connect to the shared Codex host automatically.'

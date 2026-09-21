@@ -1,0 +1,35 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createCodexBridge } from '../public/codex-bridge.js';
+import { RequestQueue } from '../companion/queue.mjs';
+function port() {
+  const event = () => { const callbacks = []; return { addListener: f => callbacks.push(f), emit: value => callbacks.forEach(f => f(value)) }; };
+  return { onMessage: event(), onDisconnect: event(), sent: [], postMessage(m) { this.sent.push(m); }, disconnect() { this.onDisconnect.emit(); } };
+}
+test('tabs share one host, IDs and cancellation stay isolated, last-tab close retains host', () => {
+  const host = port(); let starts = 0;
+  const bridge = createCodexBridge(() => { starts++; return host; });
+  const a = port(), b = port(); bridge.attach(a); bridge.attach(b);
+  a.onMessage.emit({ id: 1, method: 'ask' }); b.onMessage.emit({ id: 1, method: 'ask' });
+  assert.equal(starts, 1); assert.notEqual(host.sent[0].id, host.sent[1].id);
+  const bId = host.sent[1].id;
+  a.disconnect(); assert.equal(host.sent.at(-1).params.id, host.sent[0].id);
+  host.onMessage.emit({ id: bId, result: 'answer B' });
+  assert.deepEqual(b.sent, [{ id: 1, result: 'answer B' }]); assert.equal(a.sent.length, 0);
+  b.disconnect(); const c = port(); bridge.attach(c); assert.equal(starts, 1);
+});
+test('shared host failure notifies all clients and later connection starts fresh host', () => {
+  const hosts = [], bridge = createCodexBridge(() => { const h = port(); hosts.push(h); return h; });
+  const a = port(), b = port(); bridge.attach(a); bridge.attach(b);
+  hosts[0].disconnect(); assert(a.sent[0].disconnected); assert(b.sent[0].disconnected);
+  bridge.attach(port()); assert.equal(hosts.length, 2);
+});
+test('queue bounds concurrency and removes cancelled waiting work', async () => {
+  const queue = new RequestQueue(1);
+  const release = await queue.acquire(new AbortController().signal);
+  const cancel = new AbortController(), waiting = queue.acquire(cancel.signal);
+  const rejected = assert.rejects(waiting, /중단/); cancel.abort(); await rejected;
+  let acquired = false;
+  const next = queue.acquire(new AbortController().signal).then(release => { acquired = true; return release; });
+  await Promise.resolve(); assert.equal(acquired, false); release(); (await next)(); assert.equal(queue.active, 0);
+});

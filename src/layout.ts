@@ -1,7 +1,7 @@
 import { filterBody, type BodyContext } from './bodyFilter.ts';
 export type Word = { index: number; str: string; x: number; y: number; width: number; height: number; baseline?: number; angle?: number; font?: string };
 export type Fragment = { item: number; start: number; end: number };
-export type Sentence = { id: string; text: string; fragments: Fragment[] };
+export type Sentence = { id: string; text: string; fragments: Fragment[]; pages?: number[] };
 type Line = { words: Word[]; x: number; y: number; height: number; right: number; baseline: number };
 
 function linesOf(words: Word[]): Line[] {

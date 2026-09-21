@@ -29,16 +29,10 @@ try {
   const actual = await page.evaluate(async () => ({ userAgent: navigator.userAgent, translator: typeof Translator, availability: typeof Translator === 'undefined' ? 'missing' : await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'ko' }) }));
   console.log('Real isolated Chrome API probe:', actual);
   await page.screenshot({ path: 'artifacts/empty.png', fullPage: true });
-  await page.evaluate(() => new Promise((resolve, reject) => {
-    const request = indexedDB.open('paper-lantern', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('translations');
-    request.onsuccess = () => { const db = request.result, tx = db.transaction('translations', 'readwrite'); tx.objectStore('translations').put('OLD PRIVATE TRANSLATION', 'legacy'); tx.oncomplete = () => { db.close(); resolve(); }; };
-    request.onerror = () => reject(request.error);
-  }));
   // Controlled adapter tests UI integration; these are not a real AI quality evaluation.
   await page.addInitScript(() => {
     window.__calls = 0; window.__models = 0; window.__delay = 70;
-    indexedDB.open = () => { throw new Error('Unexpected persistent database access'); };
+    indexedDB.open = () => { throw new Error('Simulated unavailable session storage'); };
     Object.defineProperty(window, 'Translator', { configurable: true, value: {
       availability: async () => 'downloadable',
       create: async ({ monitor }) => {
@@ -148,5 +142,5 @@ try {
   await page.getByLabel('PDF 파일 선택').setInputFiles({ name: 'invalid.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not a PDF') });
   await expect(page.getByRole('alert')).toBeVisible();
   expect(errors).toEqual([]); expect(remote).toEqual([]);
-  console.log('PASS: continuous wheel scrolling, current-page sync, drag resize, saved split, reset, PDF rendering, 2-column order, translation, bidirectional hover, auto model load, all-page translation, no persistent translations, stop/resume, scanned page, invalid PDF, no external requests.');
+  console.log('PASS: continuous wheel scrolling, current-page sync, drag resize, saved split, reset, PDF rendering, 2-column order, translation, bidirectional hover, auto model load, all-page translation, unavailable session storage fallback, stop/resume, scanned page, invalid PDF, no external requests.');
 } finally { await browser.close(); await new Promise(resolve => server.httpServer.close(resolve)); }

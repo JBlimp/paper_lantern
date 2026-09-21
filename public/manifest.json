@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Paper Lantern",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "영어 PDF와 한국어 번역을 나란히 읽습니다. Chrome 로컬 번역과 선택형 Codex 번역·질문을 지원합니다.",
   "minimum_chrome_version": "138",
   "action": {
     "default_title": "Paper Lantern 열기"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "permissions": [
     "activeTab",

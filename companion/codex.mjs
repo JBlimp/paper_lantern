@@ -30,7 +30,7 @@ export class Codex {
     createInterface({ input: this.child.stdout }).on('line', line => {
       try { this.receive(JSON.parse(line)); } catch { this.fail(new Error('Codex 응답을 읽지 못했습니다.')); }
     });
-    await this.rpc('initialize', { clientInfo: { name: 'paper_lantern', title: 'Paper Lantern', version: '0.3.0' } });
+    await this.rpc('initialize', { clientInfo: { name: 'paper_lantern', title: 'Paper Lantern', version: '0.4.0' } });
     this.send({ method: 'initialized', params: {} });
   }
   send(message) { if (!this.closed) this.child.stdin.write(JSON.stringify(message) + '\n'); }

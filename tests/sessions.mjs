@@ -1,0 +1,80 @@
+import { chromium, expect } from '@playwright/test';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { preview } from 'vite';
+import { mkdir, writeFile } from 'node:fs/promises';
+await mkdir('artifacts', { recursive: true });
+const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica);
+const first = pdf.addPage([612, 792]);
+first.drawText('Cross-page experiments', { x: 50, y: 720, size: 18, font });
+first.drawText('This method uses approximate neigh-', { x: 50, y: 58, size: 12, font });
+const second = pdf.addPage([612, 792]);
+second.drawText('bor search to find similar vectors.', { x: 50, y: 710, size: 12, font });
+second.drawText('The algorithm stores a graph index.', { x: 50, y: 685, size: 12, font });
+const bytes = Buffer.from(await pdf.save()); await writeFile('artifacts/continuation.pdf', bytes);
+const other = await PDFDocument.create(), otherFont = await other.embedFont(StandardFonts.Helvetica);
+other.addPage().drawText('Different document content.', { x: 50, y: 700, size: 12, font: otherFont });
+const otherBytes = Buffer.from(await other.save());
+const server = await preview({ preview: { host: '127.0.0.1', port: 4178, strictPort: true } });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  await context.addInitScript(() => {
+    window.__inputs = []; window.__models = 0; window.__delay = 30; window.__questions = [];
+    Object.defineProperty(window, 'Translator', { configurable: true, value: { availability: async () => 'available', create: async () => {
+      window.__models++; return { destroy() {}, translate: async (text, options) => { window.__inputs.push(text); await new Promise(r => setTimeout(r, window.__delay)); options?.signal?.throwIfAborted(); return '번역: ' + text; } };
+    } } });
+    window.chrome ??= {}; window.chrome.runtime = { id: 'test', connect() {
+      const messages = [], disconnect = []; let closed = false;
+      return { onMessage: { addListener(f) { messages.push(f); } }, onDisconnect: { addListener(f) { disconnect.push(f); } }, disconnect() { if (!closed) { closed = true; disconnect.forEach(f => f()); } }, postMessage(m) {
+        if (m.method === 'cancel') return;
+        if (m.method === 'ask') window.__questions.push(m.params);
+        const result = m.method === 'status' ? { protocolVersion: 3, models: [{ id: 'test', name: 'Test', isDefault: true }] } : { answer: '이전 실험에 대한 답변입니다.', pages: [2] };
+        setTimeout(() => { if (!closed) messages.forEach(f => f({ id: m.id, result })); }, 10);
+      } };
+    } };
+  });
+  let page = await context.newPage(); const errors = [];
+  const watch = p => p.on('pageerror', e => errors.push(e.message)); watch(page);
+  const records = p => p.evaluate(() => new Promise((resolve, reject) => {
+    const r = indexedDB.open('paper-lantern-sessions'); r.onerror = () => reject(r.error);
+    r.onsuccess = () => { const db = r.result, read = db.transaction('sessions').objectStore('sessions').getAll(); read.onsuccess = () => { resolve(read.result); db.close(); }; };
+  }));
+  await page.goto('http://127.0.0.1:4178'); await page.evaluate(() => { window.__delay = 500; });
+  await page.getByLabel('PDF 파일 선택').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: bytes });
+  await expect(page.locator('.sentence.translated')).toHaveCount(1);
+  await page.getByRole('button', { name: '번역 중단', exact: true }).click();
+  await expect.poll(async () => Object.keys((await records(page))[0]?.translations ?? {}).length).toBe(1);
+  await page.reload();
+  await page.getByLabel('PDF 파일 선택').setInputFiles({ name: 'renamed.pdf', mimeType: 'application/pdf', buffer: bytes });
+  await expect(page.locator('.ai-status')).toContainText('번역 완료');
+  const inputs = await page.evaluate(() => window.__inputs);
+  expect(inputs).toHaveLength(2);
+  const joined = 'This method uses approximate neighbor search to find similar vectors.';
+  expect(inputs.filter(text => text === joined)).toHaveLength(1);
+  await page.getByRole('button', { name: '다음 페이지', exact: true }).click();
+  await expect(page.locator('.sentence p').first()).toHaveText('번역: ' + joined);
+  await page.locator('.sentence').first().hover();
+  await expect(page.locator('[data-page="1"] .highlight-box').first()).toBeAttached();
+  await expect(page.locator('[data-page="2"] .highlight-box').first()).toBeAttached();
+  await page.getByRole('button', { name: 'Codex 질문', exact: true }).click();
+  await page.getByLabel('논문 질문').fill('실험을 설명해줘'); await page.getByRole('button', { name: '질문', exact: true }).click();
+  await expect(page.locator('.chat-message')).toHaveCount(2);
+  await page.getByRole('button', { name: '번역 패널 닫기', exact: true }).click();
+  await expect.poll(async () => { const s = (await records(page))[0]; return s?.page === 2 && s?.messages.length === 2 && s?.translationOpen === false && s?.completedPages === 2; }).toBe(true);
+  await page.close(); page = await context.newPage(); watch(page); await page.goto('http://127.0.0.1:4178');
+  await page.getByLabel('PDF 파일 선택').setInputFiles({ name: 'another-name.pdf', mimeType: 'application/pdf', buffer: bytes });
+  await expect(page.locator('.ai-status')).toContainText('번역 완료');
+  await expect(page.locator('.page-controls')).toContainText('2 / 2');
+  await expect(page.locator('.translation-pane')).toBeHidden(); await expect(page.locator('.chat-message')).toHaveCount(2);
+  expect(await page.evaluate(() => window.__inputs.length)).toBe(0); expect(await page.evaluate(() => window.__models)).toBe(0);
+  await page.getByLabel('논문 질문').fill('그 결과는?'); await page.getByRole('button', { name: '질문', exact: true }).click();
+  await expect(page.locator('.chat-message')).toHaveCount(4);
+  expect(await page.evaluate(() => window.__questions[0].history.length)).toBe(2);
+  await page.getByLabel('PDF 파일 선택').setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: otherBytes });
+  await expect(page.locator('.filename')).toHaveText('paper.pdf');
+  await expect(page.locator('.ai-status')).toContainText('번역 완료 · 1 / 1');
+  await expect(page.locator('.sentence p')).toHaveText('번역: Different document content.');
+  await expect(page.locator('.chat-message')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__inputs.length)).toBe(1); expect(errors).toEqual([]);
+  console.log('PASS: partial resume, renamed-file identity, cached reopen without model startup, conversation/page/panel restoration, cross-page translation once and two-page highlighting, distinct file isolation.');
+} finally { await browser.close(); await new Promise(r => server.httpServer.close(r)); }

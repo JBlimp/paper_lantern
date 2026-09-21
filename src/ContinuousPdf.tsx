@@ -36,9 +36,11 @@ export function ContinuousPdf(props: Props) {
     let frame = 0;
     const measure = () => {
       frame = 0;
+      if (root.scrollHeight <= root.clientHeight + 2) return;
       const target = root.getBoundingClientRect().top + Math.min(120, root.clientHeight * .25);
       const slots = [...root.querySelectorAll<HTMLElement>('.pdf-page-slot')];
-      const slot = slots.find(s => s.getBoundingClientRect().bottom > target) ?? slots.at(-1);
+      const atBottom = root.scrollTop >= root.scrollHeight - root.clientHeight - 2;
+      const slot = atBottom ? slots.at(-1) : slots.find(s => s.getBoundingClientRect().bottom > target) ?? slots.at(-1);
       if (slot) {
         const number = Number(slot.dataset.page);
         if (current.current !== number) { current.current = number; latest.current.onPage(number); }

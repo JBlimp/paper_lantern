@@ -1,12 +1,12 @@
 {
   "name": "paper-lantern",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build && node scripts/package.mjs",
-    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/bodyFilter.test.ts tests/references.test.ts tests/codex.test.ts tests/codex-protocol.test.mjs",
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/bodyFilter.test.ts tests/references.test.ts tests/codex.test.ts tests/codex-protocol.test.mjs tests/pageContinuations.test.ts tests/shared-codex.test.mjs",
     "test:e2e": "node tests/e2e.mjs"
   },
   "dependencies": {

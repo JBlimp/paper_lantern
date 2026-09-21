@@ -20,7 +20,7 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`chrome-extension://${id}/index.html`);
   await page.getByLabel('번역 엔진').selectOption('codex');
-  await page.getByRole('button', { name: 'Codex 연결', exact: true }).click();
+  if (!await page.locator('.codex-panel').isVisible()) await page.getByRole('button', { name: 'Codex 질문', exact: true }).click();
   await expect(page.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
   await page.getByRole('button', { name: 'Codex 설정', exact: true }).click();
   await page.getByLabel('번역 시스템 프롬프트').fill('한국어로 번역하고 graph index라는 전문 용어는 영어 그대로 유지하세요. 각 번역문은 "번역:"으로 시작하세요.');
@@ -47,10 +47,15 @@ try {
   const pdfTab = await context.newPage();
   await pdfTab.goto(pathToFileURL(resolve('artifacts/codex-sample.pdf')).href);
   const reader = pdfTab.frameLocator('#paper-lantern-reader');
-  await reader.getByRole('button', { name: 'Codex 질문', exact: true }).click();
-  await reader.getByRole('button', { name: 'Codex 연결', exact: true }).click();
+  await expect(reader.locator('.ai-status')).toContainText('번역 완료', { timeout: 45000 });
+  if (!await reader.locator('.codex-panel').isVisible()) await reader.getByRole('button', { name: 'Codex 질문', exact: true }).click();
+  await expect(reader.locator('.chat-message.assistant')).toHaveCount(1);
+
   await expect(reader.locator('.codex-panel header')).toContainText('연결됨', { timeout: 45000 });
+  const getPid = target => target.evaluate(() => new Promise(resolve => { const port = chrome.runtime.connect({name:'paper-lantern-codex'}); port.onMessage.addListener(m => { if(m.id===1) { port.disconnect(); resolve(m.result?.serverPid); } }); port.postMessage({id:1,method:'status',params:{}}); }));
+  const firstPid = await getPid(page), secondPid = await getPid(pdfTab.frames().find(f => f.url().includes('index.html?embedded')));
+  expect(typeof firstPid).toBe('number'); expect(secondPid).toBe(firstPid);
   await reader.getByRole('button', { name: '연결 해제', exact: true }).click();
   await expect(reader.getByRole('button', { name: 'Codex 연결', exact: true })).toBeVisible();
-  console.log('PASS: real native messaging, ChatGPT login, model catalog, Codex translation, Q&A, page citation, cancellation. Extension ID:', id);
+  console.log('PASS: real native messaging, ChatGPT login, model catalog, Codex translation, Q&A, page citation, cancellation, persisted session, shared server across tabs. Extension ID:', id);
 } finally { await context.close(); }

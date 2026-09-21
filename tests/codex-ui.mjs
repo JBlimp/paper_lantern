@@ -6,7 +6,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } }), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => {
-    window.__requests = []; window.__delay = 50; window.__failConnect = true;
+    indexedDB.open = () => { throw new Error('Isolated UI test: storage unavailable'); }; window.__requests = []; window.__delay = 50; window.__failConnect = false;
     Object.defineProperty(window, 'Translator', { configurable: true, value: { availability: async () => 'available', create: async () => ({ translate: async text => 'Chrome: ' + text, destroy() {} }) } });
     window.chrome ??= {};
     window.chrome.runtime = { id: 'test', connect() {
@@ -21,7 +21,7 @@ try {
             if (closed) return;
             let result;
             if (m.method === 'status' && window.__failConnect) { window.__failConnect = false; listeners.forEach(f => f({ id: m.id, error: '연결 테스트 오류' })); return; }
-            if (m.method === 'status') result = { protocolVersion: 2, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }] };
+            if (m.method === 'status') result = { protocolVersion: 3, models: [{ id: 'test-model', name: 'Test Codex', isDefault: true }, { id: 'question-model', name: 'Question Model', isDefault: false }] };
             if (m.method === 'translate') result = Object.fromEntries(m.params.sentences.map(s => [s.id, 'Codex: ' + s.text]));
             if (m.method === 'ask') result = { answer: '**답변**입니다.', pages: [Math.min(2, m.params.pages.length)] };
             listeners.forEach(f => f({ id: m.id, result }));
@@ -34,14 +34,15 @@ try {
   await page.getByLabel('PDF 파일 선택').setInputFiles('artifacts/sample-paper.pdf');
   await expect(page.locator('.ai-status')).toContainText('번역 완료');
   await page.getByLabel('번역 엔진').selectOption('codex');
-  await page.getByRole('button', { name: 'Codex 연결', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('연결 테스트 오류');
-  await page.getByRole('button', { name: 'Codex 연결', exact: true }).click();
+  await page.getByRole('button', { name: 'Codex 질문', exact: true }).click();
+  await expect(page.locator('.codex-panel header')).toContainText('연결됨');
   await expect(page.locator('.ai-status')).toContainText('번역 완료');
   await expect(page.locator('.sentence p').first()).toContainText('Codex:');
   const batches = await page.evaluate(() => window.__requests.filter(r => r.method === 'translate'));
   expect(batches).toHaveLength(2); expect(batches[0].params.context).toContain('local reading assistant');
   await page.getByRole('button', { name: 'Codex 설정', exact: true }).click();
+  await page.getByLabel('번역 기본 모델').selectOption('test-model');
+  await page.getByLabel('질문 기본 모델').selectOption('question-model');
   await page.getByLabel('번역 시스템 프롬프트').fill('번역 설정 테스트: 전문 용어 유지');
   await page.getByLabel('질문 시스템 프롬프트').fill('질문 설정 테스트: 핵심부터 설명');
   await page.screenshot({ path: 'artifacts/white-settings.png' });
@@ -72,6 +73,15 @@ try {
   expect(selectionRequest.pages).toHaveLength(1); expect(selectionRequest.pages[0].page).toBe(1);
   expect(selectionRequest.pages[0].text).toContain('Local Reader');
   expect(selectionRequest.systemPrompt).toContain('질문 설정 테스트');
+  expect(selectionRequest.model).toBe('question-model');
+  expect(await page.evaluate(() => window.__requests.filter(r => r.method === 'translate').at(-1).params.model)).toBe('test-model');
+  const priorTranslations = await page.locator('.sentence p').allTextContents();
+  await page.getByRole('button', { name: '번역 패널 닫기', exact: true }).click();
+  await expect(page.locator('.translation-pane')).toBeHidden();
+  await expect(page.getByRole('separator')).toBeHidden();
+  await page.getByRole('button', { name: '번역', exact: true }).click();
+  await expect(page.locator('.translation-pane')).toBeVisible();
+  expect(await page.locator('.sentence p').allTextContents()).toEqual(priorTranslations);
   expect(await page.locator('.toolbar').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   expect(await page.locator('.codex-panel').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   await page.screenshot({ path: 'artifacts/white-reader.png' });
